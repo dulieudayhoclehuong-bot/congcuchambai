@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Công Cụ Đánh Giá Video (V25 - AI Powered)</title>
+    <title>Công Cụ Đánh Giá Video (V26 - Tùy Biến AI)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -101,21 +101,49 @@
         };
 
         // --- AI HELPER FUNCTION ---
-        const callGeminiAI = async (apiKey, text, type) => {
+        const callGeminiAI = async (apiKey, text, type, customPrompt) => {
             if (!text.trim()) return text;
             
-            const prompt = type === 'pros' 
-                ? `Bạn là một giáo viên tiểu học thân thiện. Hãy viết lại các ý nhận xét ưu điểm sau đây thành một câu văn mạch lạc, giọng điệu khen ngợi, khích lệ: "${text}"`
-                : `Bạn là một giáo viên tiểu học ân cần. Hãy viết lại các ý góp ý sau đây thành một câu văn nhẹ nhàng, mang tính xây dựng, giúp học sinh sửa lỗi mà không bị tổn thương: "${text}"`;
+            // System instructions based on type and custom prompt
+            let systemInstruction = "Bạn là một giáo viên tiểu học. Hãy viết lại nội dung nhận xét sau đây:";
+            let personaPrompt = "";
+
+            if (type === 'pros') {
+                personaPrompt = "Hãy viết lại các ý nhận xét ưu điểm sau đây thành một câu văn mạch lạc, giọng điệu khen ngợi, khích lệ và mang tính sư phạm: ";
+            } else {
+                personaPrompt = "Hãy viết lại các ý góp ý sau đây thành một câu văn nhẹ nhàng, mang tính xây dựng, giúp học sinh sửa lỗi mà không bị tổn thương: ";
+            }
+
+            // Integrate custom prompt if provided
+            if (customPrompt.trim()) {
+                systemInstruction += ` Yêu cầu cụ thể: ${customPrompt}.`;
+            }
+
+            const prompt = personaPrompt + `"${text}"`;
 
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                });
-                const data = await response.json();
-                return data.candidates?.[0]?.content?.parts?.[0]?.text || text;
+                // Implementing exponential backoff
+                for (let i = 0; i < 3; i++) { // Max 3 retries
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            contents: [{ parts: [{ text: prompt }] }],
+                            systemInstruction: { parts: [{ text: systemInstruction }] }
+                        })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        return data.candidates?.[0]?.content?.parts?.[0]?.text || text;
+                    }
+
+                    // If not OK, wait and retry
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                }
+                
+                throw new Error("API call failed after retries.");
+
             } catch (error) {
                 console.error("AI Error:", error);
                 throw error;
@@ -123,24 +151,27 @@
         };
 
         // --- COMPONENTS ---
-        const SettingsModal = ({ isOpen, onClose, apiKey, setApiKey }) => {
+        const SettingsModal = ({ isOpen, onClose, apiKey, setApiKey, customPrompt, setCustomPrompt }) => {
             const [keyInput, setKeyInput] = useState(apiKey);
+            const [promptInput, setPromptInput] = useState(customPrompt);
 
-            useEffect(() => { setKeyInput(apiKey); }, [apiKey, isOpen]);
+            useEffect(() => { setKeyInput(apiKey); setPromptInput(customPrompt); }, [apiKey, customPrompt, isOpen]);
 
             if (!isOpen) return null;
 
             const handleSave = () => {
                 setApiKey(keyInput);
+                setCustomPrompt(promptInput);
                 localStorage.setItem("gemini_api_key", keyInput);
+                localStorage.setItem("ai_custom_prompt", promptInput);
                 onClose();
             };
 
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl p-6 w-96 shadow-2xl animate-fade-in">
+                    <div className="bg-white rounded-xl p-6 w-[600px] max-w-full shadow-2xl animate-fade-in">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-bold text-lg flex items-center gap-2"><Icon name="cpu" className="w-5 h-5 text-purple-600" /> Cài Đặt AI</h3>
+                            <h3 className="font-bold text-lg flex items-center gap-2 text-purple-600"><Icon name="cpu" className="w-5 h-5 text-purple-600" /> Cài Đặt AI & Tùy Biến</h3>
                             <button onClick={onClose}><Icon name="x" className="w-5 h-5 text-gray-400 hover:text-red-500" /></button>
                         </div>
                         <div className="mb-4">
@@ -153,17 +184,32 @@
                                 placeholder="Dán API Key vào đây..."
                             />
                             <p className="text-xs text-gray-500 mt-2">
-                                Bạn cần có API Key để sử dụng tính năng "Viết lại bằng AI".
-                                <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-600 hover:underline ml-1">Lấy Key tại đây</a>.
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-600 hover:underline">Lấy Key tại đây</a>.
                             </p>
                         </div>
+
+                        <div className="mb-6 border-t pt-4">
+                            <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-1">
+                                <Icon name="wand-2" className="w-4 h-4 text-purple-500" />
+                                Hướng dẫn tùy biến cho AI (Tùy chọn):
+                            </label>
+                            <textarea 
+                                value={promptInput}
+                                onChange={(e) => setPromptInput(e.target.value)}
+                                rows="3"
+                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm resize-none"
+                                placeholder="Ví dụ: 'Luôn viết câu trả lời bằng tiếng Anh, viết lời khen theo phong cách thơ lục bát...'"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">AI sẽ áp dụng hướng dẫn này cho mọi lần viết lại (Sparkles).</p>
+                        </div>
+                        
                         <button onClick={handleSave} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition-colors">Lưu Cài Đặt</button>
                     </div>
                 </div>
             );
         };
 
-        const AIButton = ({ text, onResult, type, apiKey, openSettings }) => {
+        const AIButton = ({ text, onResult, type, apiKey, openSettings, customPrompt }) => {
             const [isLoading, setIsLoading] = useState(false);
 
             const handleAI = async () => {
@@ -179,7 +225,7 @@
 
                 setIsLoading(true);
                 try {
-                    const result = await callGeminiAI(apiKey, text, type);
+                    const result = await callGeminiAI(apiKey, text, type, customPrompt);
                     onResult(result.trim());
                 } catch (error) {
                     alert("Lỗi khi gọi AI. Vui lòng kiểm tra lại API Key hoặc kết nối mạng.");
@@ -256,7 +302,7 @@
             );
         };
 
-        const SimpleInputSection = ({ title, iconName, color, tags, state, setState, videoRef, theme, apiKey, openSettings, type }) => {
+        const SimpleInputSection = ({ title, iconName, color, tags, state, setState, videoRef, theme, apiKey, openSettings, customPrompt, type }) => {
             const colorClasses = {
                 green: { 
                     bg: theme.isDark ? "bg-emerald-900/20" : "bg-emerald-50", 
@@ -286,7 +332,7 @@
                             <h3 className={`font-bold text-lg ${colorClasses.text}`}>{title}</h3>
                         </div>
                         <div className="flex gap-2">
-                            <AIButton text={state} onResult={setState} type={type} apiKey={apiKey} openSettings={openSettings} />
+                            <AIButton text={state} onResult={setState} type={type} apiKey={apiKey} openSettings={openSettings} customPrompt={customPrompt} />
                             <TimestampButton videoRef={videoRef} contentState={state} setContent={setState} isDark={theme.isDark} />
                             <VoiceButton onTranscript={(txt) => handleAppend(txt, state, setState)} isDark={theme.isDark} />
                         </div>
@@ -341,8 +387,9 @@
             // --- EDIT MODE STATE ---
             const [editingKey, setEditingKey] = useState(null);
 
-            // --- API KEY STATE ---
+            // --- AI KEY & CUSTOM PROMPT STATE ---
             const [apiKey, setApiKey] = useState(() => localStorage.getItem("gemini_api_key") || "");
+            const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem("ai_custom_prompt") || "");
             const [showSettings, setShowSettings] = useState(false);
 
             const videoRef = useRef(null);
@@ -546,7 +593,7 @@
                             <div className="flex flex-wrap justify-center items-center gap-4">
                                 {/* Settings & Data */}
                                 <div className="flex gap-2">
-                                    <button onClick={() => setShowSettings(true)} className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg`} title="Cài đặt AI"><Icon name="settings" className="w-5 h-5" /></button>
+                                    <button onClick={() => setShowSettings(true)} className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg`} title="Cài đặt AI & Tùy biến"><Icon name="settings" className="w-5 h-5" /></button>
                                     <button onClick={handleExportData} className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg`} title="Sao lưu dữ liệu"><Icon name="download" className="w-5 h-5" /></button>
                                     <label className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg cursor-pointer`} title="Khôi phục dữ liệu">
                                         <Icon name="upload" className="w-5 h-5" />
@@ -626,10 +673,16 @@
                                 {/* Review Boxes */}
                                 <div className={`flex-grow overflow-y-auto p-5 space-y-6 custom-scrollbar ${theme.isDark ? 'bg-slate-900/50' : 'bg-slate-50/30'}`}>
                                     <div className="h-[400px]"> 
-                                        <SimpleInputSection title="Ưu Điểm" iconName="check-circle-2" color="green" tags={suggestionTags.pros} state={pros} setState={setPros} videoRef={videoRef} theme={theme} apiKey={apiKey} openSettings={()=>setShowSettings(true)} type="pros" />
+                                        <SimpleInputSection 
+                                            title="Ưu Điểm" iconName="check-circle-2" color="green" tags={suggestionTags.pros} state={pros} setState={setPros} videoRef={videoRef} theme={theme} 
+                                            apiKey={apiKey} openSettings={()=>setShowSettings(true)} customPrompt={customPrompt} type="pros" 
+                                        />
                                     </div>
                                     <div className="h-[400px]"> 
-                                        <SimpleInputSection title="Góp Ý / Hạn Chế" iconName="message-circle" color="blue" tags={suggestionTags.cons} state={cons} setState={setCons} videoRef={videoRef} theme={theme} apiKey={apiKey} openSettings={()=>setShowSettings(true)} type="cons" />
+                                        <SimpleInputSection 
+                                            title="Góp Ý / Hạn Chế" iconName="message-circle" color="blue" tags={suggestionTags.cons} state={cons} setState={setCons} videoRef={videoRef} theme={theme} 
+                                            apiKey={apiKey} openSettings={()=>setShowSettings(true)} customPrompt={customPrompt} type="cons" 
+                                        />
                                     </div>
                                 </div>
 
@@ -716,7 +769,7 @@
                             </div>
                         </div>
                     </div>
-                    <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} apiKey={apiKey} setApiKey={setApiKey} />
+                    <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} apiKey={apiKey} setApiKey={setApiKey} customPrompt={customPrompt} setCustomPrompt={setCustomPrompt} />
                 </div>
             );
         }
