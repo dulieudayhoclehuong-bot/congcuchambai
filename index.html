@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Công Cụ Đánh Giá Video (V26 - Tùy Biến AI)</title>
+    <title>Công Cụ Đánh Giá Video (V31 - Tab View & Sticky Layout)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -25,13 +25,15 @@
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             transition: background-color 0.3s ease;
+            overflow-x: hidden; /* Prevent horizontal scroll */
         }
-        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { border-radius: 10px; background-color: rgba(156, 163, 175, 0.5); }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(107, 114, 128, 0.8); }
         .chip { transition: all 0.2s; user-select: none; white-space: nowrap; }
         .chip:active { transform: scale(0.95); }
+        
         @keyframes mic-pulse {
             0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
             70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
@@ -44,6 +46,9 @@
             50% { transform: scale(1.1); opacity: 0.8; }
         }
         .ai-loading { animation: sparkle-pulse 1s infinite; }
+
+        .playlist-item-enter { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
         * { transition: background-color 0.2s, border-color 0.2s, color 0.2s; }
     </style>
@@ -100,50 +105,37 @@
             return `[${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}]`;
         };
 
-        // --- AI HELPER FUNCTION ---
         const callGeminiAI = async (apiKey, text, type, customPrompt) => {
             if (!text.trim()) return text;
-            
-            // System instructions based on type and custom prompt
             let systemInstruction = "Bạn là một giáo viên tiểu học. Hãy viết lại nội dung nhận xét sau đây:";
-            let personaPrompt = "";
+            let personaPrompt = type === 'pros' 
+                ? "Hãy viết lại các ý nhận xét ưu điểm sau đây thành một câu văn mạch lạc, giọng điệu khen ngợi, khích lệ và mang tính sư phạm: "
+                : "Hãy viết lại các ý góp ý sau đây thành một câu văn nhẹ nhàng, mang tính xây dựng, giúp học sinh sửa lỗi mà không bị tổn thương: ";
 
-            if (type === 'pros') {
-                personaPrompt = "Hãy viết lại các ý nhận xét ưu điểm sau đây thành một câu văn mạch lạc, giọng điệu khen ngợi, khích lệ và mang tính sư phạm: ";
-            } else {
-                personaPrompt = "Hãy viết lại các ý góp ý sau đây thành một câu văn nhẹ nhàng, mang tính xây dựng, giúp học sinh sửa lỗi mà không bị tổn thương: ";
-            }
-
-            // Integrate custom prompt if provided
             if (customPrompt.trim()) {
                 systemInstruction += ` Yêu cầu cụ thể: ${customPrompt}.`;
+            } else {
+                if (type === 'pros') systemInstruction += ` Ghi nhận trực tiếp những điểm đã làm được. Giọng văn: Trung lập, rõ ràng.`;
+                else systemInstruction += ` Nêu thẳng vấn đề cần cải thiện và đưa ra giải pháp. Giọng văn: Rõ ràng, định hướng.`;
             }
 
             const prompt = personaPrompt + `"${text}"`;
+            systemInstruction += " Xưng 'Cô' và gọi học sinh là 'Con'. Viết ngắn gọn (3-4 câu).";
 
             try {
-                // Implementing exponential backoff
-                for (let i = 0; i < 3; i++) { // Max 3 retries
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            contents: [{ parts: [{ text: prompt }] }],
-                            systemInstruction: { parts: [{ text: systemInstruction }] }
-                        })
-                    });
-
-                    if (response.ok) {
-                        const data = await response.json();
-                        return data.candidates?.[0]?.content?.parts?.[0]?.text || text;
-                    }
-
-                    // If not OK, wait and retry
-                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        contents: [{ parts: [{ text: prompt }] }],
+                        systemInstruction: { parts: [{ text: systemInstruction }] }
+                    })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text || text;
                 }
-                
-                throw new Error("API call failed after retries.");
-
+                throw new Error("API call failed.");
             } catch (error) {
                 console.error("AI Error:", error);
                 throw error;
@@ -154,11 +146,8 @@
         const SettingsModal = ({ isOpen, onClose, apiKey, setApiKey, customPrompt, setCustomPrompt }) => {
             const [keyInput, setKeyInput] = useState(apiKey);
             const [promptInput, setPromptInput] = useState(customPrompt);
-
             useEffect(() => { setKeyInput(apiKey); setPromptInput(customPrompt); }, [apiKey, customPrompt, isOpen]);
-
             if (!isOpen) return null;
-
             const handleSave = () => {
                 setApiKey(keyInput);
                 setCustomPrompt(promptInput);
@@ -166,44 +155,22 @@
                 localStorage.setItem("ai_custom_prompt", promptInput);
                 onClose();
             };
-
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl p-6 w-[600px] max-w-full shadow-2xl animate-fade-in">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-bold text-lg flex items-center gap-2 text-purple-600"><Icon name="cpu" className="w-5 h-5 text-purple-600" /> Cài Đặt AI & Tùy Biến</h3>
-                            <button onClick={onClose}><Icon name="x" className="w-5 h-5 text-gray-400 hover:text-red-500" /></button>
-                        </div>
+                    <div className="bg-white rounded-xl p-6 w-[600px] max-w-full shadow-2xl">
+                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-purple-600"><Icon name="cpu" /> Cài Đặt AI</h3>
                         <div className="mb-4">
-                            <label className="block text-sm font-bold text-gray-700 mb-2">Google Gemini API Key:</label>
-                            <input 
-                                type="password" 
-                                value={keyInput}
-                                onChange={(e) => setKeyInput(e.target.value)}
-                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
-                                placeholder="Dán API Key vào đây..."
-                            />
-                            <p className="text-xs text-gray-500 mt-2">
-                                <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-600 hover:underline">Lấy Key tại đây</a>.
-                            </p>
+                            <label className="block text-sm font-bold mb-2">Google Gemini API Key:</label>
+                            <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} className="w-full p-2 border rounded-lg" placeholder="Dán API Key..." />
                         </div>
-
-                        <div className="mb-6 border-t pt-4">
-                            <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-1">
-                                <Icon name="wand-2" className="w-4 h-4 text-purple-500" />
-                                Hướng dẫn tùy biến cho AI (Tùy chọn):
-                            </label>
-                            <textarea 
-                                value={promptInput}
-                                onChange={(e) => setPromptInput(e.target.value)}
-                                rows="3"
-                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm resize-none"
-                                placeholder="Ví dụ: 'Luôn viết câu trả lời bằng tiếng Anh, viết lời khen theo phong cách thơ lục bát...'"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">AI sẽ áp dụng hướng dẫn này cho mọi lần viết lại (Sparkles).</p>
+                        <div className="mb-6">
+                            <label className="block text-sm font-bold mb-2">Hướng dẫn tùy biến cho AI:</label>
+                            <textarea value={promptInput} onChange={(e) => setPromptInput(e.target.value)} rows="3" className="w-full p-2 border rounded-lg" placeholder="Ví dụ: 'Luôn viết câu trả lời ngắn gọn...'" />
                         </div>
-                        
-                        <button onClick={handleSave} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition-colors">Lưu Cài Đặt</button>
+                        <div className="flex justify-end gap-2">
+                            <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg">Đóng</button>
+                            <button onClick={handleSave} className="px-4 py-2 bg-purple-600 text-white rounded-lg">Lưu</button>
+                        </div>
                     </div>
                 </div>
             );
@@ -211,36 +178,17 @@
 
         const AIButton = ({ text, onResult, type, apiKey, openSettings, customPrompt }) => {
             const [isLoading, setIsLoading] = useState(false);
-
             const handleAI = async () => {
-                if (!apiKey) {
-                    alert("Vui lòng nhập API Key trong phần Cài đặt để dùng tính năng này!");
-                    openSettings();
-                    return;
-                }
-                if (!text.trim()) {
-                    alert("Hãy nhập vài ý chính trước khi nhờ AI viết lại nhé!");
-                    return;
-                }
-
+                if (!apiKey) return openSettings();
+                if (!text.trim()) return alert("Nhập nội dung trước!");
                 setIsLoading(true);
                 try {
                     const result = await callGeminiAI(apiKey, text, type, customPrompt);
                     onResult(result.trim());
-                } catch (error) {
-                    alert("Lỗi khi gọi AI. Vui lòng kiểm tra lại API Key hoặc kết nối mạng.");
-                } finally {
-                    setIsLoading(false);
-                }
+                } catch { alert("Lỗi AI."); } finally { setIsLoading(false); }
             };
-
             return (
-                <button 
-                    onClick={handleAI} 
-                    disabled={isLoading}
-                    className={`p-1.5 rounded-full border transition-all ${isLoading ? 'bg-yellow-100 border-yellow-300 ai-loading' : 'bg-white hover:bg-yellow-50 text-yellow-600 border-yellow-200'}`} 
-                    title="AI Viết Lại (Viết hay hơn)"
-                >
+                <button onClick={handleAI} disabled={isLoading} className={`p-1.5 rounded-full border transition-all ${isLoading ? 'bg-yellow-100 border-yellow-300 ai-loading' : 'bg-white hover:bg-yellow-50 text-yellow-600 border-yellow-200'}`} title="AI Viết Lại">
                     <Icon name="sparkles" className="w-4 h-4" />
                 </button>
             );
@@ -249,33 +197,22 @@
         const VoiceButton = ({ onTranscript, isDark }) => {
             const [isListening, setIsListening] = useState(false);
             const recognitionRef = useRef(null);
-
             useEffect(() => {
                 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
                     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                     recognitionRef.current = new SpeechRecognition();
                     recognitionRef.current.lang = 'vi-VN';
-                    recognitionRef.current.continuous = false;
-                    recognitionRef.current.interimResults = false;
                     recognitionRef.current.onstart = () => setIsListening(true);
                     recognitionRef.current.onend = () => setIsListening(false);
                     recognitionRef.current.onresult = (event) => onTranscript(event.results[0][0].transcript);
                 }
             }, [onTranscript]);
-
             const toggle = () => {
-                if (!recognitionRef.current) return alert("Dùng Chrome/Edge để hỗ trợ giọng nói.");
+                if (!recognitionRef.current) return alert("Trình duyệt không hỗ trợ.");
                 isListening ? recognitionRef.current.stop() : recognitionRef.current.start();
             };
-
-            const btnClass = isListening 
-                ? 'bg-red-500 text-white mic-active border-red-500' 
-                : isDark 
-                    ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600'
-                    : 'bg-white hover:bg-blue-50 text-slate-500 hover:text-blue-500 border-slate-200';
-
             return (
-                <button onClick={toggle} className={`p-1.5 rounded-full border transition-all ${btnClass}`} title="Nhập giọng nói">
+                <button onClick={toggle} className={`p-1.5 rounded-full border transition-all ${isListening ? 'bg-red-500 text-white mic-active' : isDark ? 'bg-slate-700 text-slate-300' : 'bg-white text-slate-500'}`} title="Nhập giọng nói">
                     <Icon name={isListening ? "mic-off" : "mic"} className="w-4 h-4" />
                 </button>
             );
@@ -286,17 +223,11 @@
                 if (videoRef.current) {
                     const timeTag = formatTime(videoRef.current.currentTime);
                     const newVal = (contentState || "").trimEnd();
-                    const separator = (newVal.length > 0 && !newVal.endsWith("\n")) ? " " : "";
-                    setContent(newVal + separator + timeTag + " ");
-                } else {
-                    alert("Chưa có video đang phát!");
-                }
+                    setContent(newVal + (newVal ? " " : "") + timeTag + " ");
+                } else alert("Chưa có video!");
             };
-            const btnClass = isDark
-                ? 'bg-slate-700 hover:bg-slate-600 text-purple-400 border-slate-600'
-                : 'bg-white hover:bg-purple-50 text-purple-500 border-purple-200';
             return (
-                <button onClick={insertTime} className={`p-1.5 rounded-full border transition-all ${btnClass}`} title="Chèn thời gian">
+                <button onClick={insertTime} className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-slate-700 text-purple-400' : 'bg-white text-purple-500'}`} title="Chèn thời gian">
                     <Icon name="clock" className="w-4 h-4" />
                 </button>
             );
@@ -304,20 +235,10 @@
 
         const SimpleInputSection = ({ title, iconName, color, tags, state, setState, videoRef, theme, apiKey, openSettings, customPrompt, type }) => {
             const colorClasses = {
-                green: { 
-                    bg: theme.isDark ? "bg-emerald-900/20" : "bg-emerald-50", 
-                    border: theme.isDark ? "border-emerald-800" : "border-emerald-200", 
-                    text: theme.isDark ? "text-emerald-400" : "text-emerald-700", 
-                    chip: theme.isDark ? "bg-emerald-900 text-emerald-300 border-emerald-800 hover:bg-emerald-800" : "bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100" 
-                },
-                blue: { 
-                    bg: theme.isDark ? "bg-blue-900/20" : "bg-blue-50", 
-                    border: theme.isDark ? "border-blue-800" : "border-blue-200", 
-                    text: theme.isDark ? "text-blue-400" : "text-blue-700", 
-                    chip: theme.isDark ? "bg-blue-900 text-blue-300 border-blue-800 hover:bg-blue-800" : "bg-white border-blue-200 text-blue-700 hover:bg-blue-100" 
-                } 
+                green: { bg: theme.isDark ? "bg-emerald-900/20" : "bg-emerald-50", border: theme.isDark ? "border-emerald-800" : "border-emerald-200", text: theme.isDark ? "text-emerald-400" : "text-emerald-700", chip: theme.isDark ? "bg-emerald-900 text-emerald-300 border-emerald-800" : "bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100" },
+                blue: { bg: theme.isDark ? "bg-blue-900/20" : "bg-blue-50", border: theme.isDark ? "border-blue-800" : "border-blue-200", text: theme.isDark ? "text-blue-400" : "text-blue-700", chip: theme.isDark ? "bg-blue-900 text-blue-300 border-blue-800" : "bg-white border-blue-200 text-blue-700 hover:bg-blue-100" } 
             }[color];
-
+            
             const handleAppend = (text, currentVal, setter) => {
                 let newVal = currentVal || "";
                 if (newVal && !newVal.endsWith(" ")) newVal += " ";
@@ -325,11 +246,11 @@
             };
 
             return (
-                <div className={`rounded-xl p-4 border ${colorClasses.bg} ${colorClasses.border} flex flex-col h-full shadow-sm transition-colors`}>
-                    <div className="flex justify-between items-center mb-3">
+                <div className={`rounded-xl p-5 border ${colorClasses.bg} ${colorClasses.border} flex flex-col h-full shadow-sm transition-colors`}>
+                    <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-2">
-                            <Icon name={iconName} className={`w-5 h-5 ${color === 'green' ? 'text-emerald-500' : 'text-blue-500'}`} />
-                            <h3 className={`font-bold text-lg ${colorClasses.text}`}>{title}</h3>
+                            <Icon name={iconName} className={`w-6 h-6 ${color === 'green' ? 'text-emerald-500' : 'text-blue-500'}`} />
+                            <h3 className={`font-bold text-xl ${colorClasses.text}`}>{title}</h3>
                         </div>
                         <div className="flex gap-2">
                             <AIButton text={state} onResult={setState} type={type} apiKey={apiKey} openSettings={openSettings} customPrompt={customPrompt} />
@@ -338,7 +259,7 @@
                         </div>
                     </div>
                     
-                    <div className="mb-3">
+                    <div className="mb-4">
                         {Object.entries(tags).map(([category, items]) => (
                             <div key={category} className="mb-2 last:mb-0">
                                 <div className={`text-[10px] font-bold uppercase opacity-60 mb-1 ${theme.textSub}`}>{category}</div>
@@ -356,9 +277,71 @@
                     <textarea 
                         value={state} 
                         onChange={e => setState(e.target.value)} 
-                        className={`w-full flex-grow p-4 text-base border rounded-xl focus:outline-none focus:ring-2 focus:ring-opacity-50 resize-none shadow-inner transition-colors ${theme.inputBg} ${theme.inputBorder} ${theme.textMain} placeholder-gray-400`}
-                        placeholder={`Nhập nhận xét...`}
+                        rows={12}
+                        className={`w-full flex-grow p-4 text-base border rounded-xl focus:outline-none focus:ring-2 focus:ring-opacity-50 resize-y shadow-inner transition-colors ${theme.inputBg} ${theme.inputBorder} ${theme.textMain} placeholder-gray-400`}
+                        placeholder={`Nhập nhận xét chi tiết...`}
+                        style={{ minHeight: '200px' }}
                     ></textarea>
+                </div>
+            );
+        };
+
+        // --- PLAYLIST COMPONENT ---
+        const PlaylistSection = ({ queue, currentId, onSelect, onDelete, onUpload, theme }) => {
+            return (
+                <div className={`flex flex-col h-full ${theme.cardBg} border ${theme.cardBorder} rounded-xl shadow-lg overflow-hidden`}>
+                    <div className={`p-4 border-b ${theme.headerBorder} ${theme.headerBg} flex justify-between items-center shrink-0`}>
+                        <h3 className={`font-bold ${theme.textMain} flex items-center gap-2`}>
+                            <Icon name="list-video" className="w-5 h-5" /> Danh Sách Phát
+                        </h3>
+                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${theme.accentBg} ${theme.accent}`}>{queue.length} video</span>
+                    </div>
+
+                    {/* Upload Button Area */}
+                    <div className={`p-3 border-b ${theme.headerBorder} bg-gray-50/50 shrink-0`}>
+                         <label className={`w-full cursor-pointer py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 ${theme.buttonPrimary} flex items-center justify-center gap-2`}>
+                            <Icon name="folder-up" className="w-4 h-4" />
+                            <span>Thêm Video Mới</span>
+                            <input type="file" accept="video/*" multiple onChange={onUpload} onClick={e=>e.target.value=null} className="hidden" />
+                        </label>
+                    </div>
+
+                    {/* Scrollable List */}
+                    <div className="flex-grow overflow-y-auto custom-scrollbar p-2 space-y-2 min-h-0">
+                        {queue.length === 0 ? (
+                            <div className="text-center py-8 text-gray-400 text-sm italic">
+                                Chưa có video nào.<br/>Vui lòng tải lên.
+                            </div>
+                        ) : (
+                            queue.map((item, index) => {
+                                const isPlaying = item.id === currentId;
+                                return (
+                                    <div 
+                                        key={item.id} 
+                                        onClick={() => onSelect(item.id)}
+                                        className={`playlist-item-enter relative p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md flex items-center gap-3 ${isPlaying ? `${theme.accentBg} ${theme.accent} border-blue-300 ring-1 ring-blue-300` : `${theme.cardBg} ${theme.textMain} border-transparent hover:bg-gray-100`}`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isPlaying ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                                            {isPlaying ? <Icon name="play" className="w-4 h-4 fill-current" /> : <span className="text-xs font-bold">{index + 1}</span>}
+                                        </div>
+                                        
+                                        <div className="flex-grow min-w-0">
+                                            <div className="truncate font-medium text-sm" title={item.name}>{item.name}</div>
+                                            {isPlaying && <div className="text-[10px] uppercase font-bold tracking-wider opacity-70">Đang phát</div>}
+                                        </div>
+
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+                                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                            title="Xóa khỏi danh sách"
+                                        >
+                                            <Icon name="x" className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                )
+                            })
+                        )}
+                    </div>
                 </div>
             );
         };
@@ -366,28 +349,27 @@
         function App() {
             const [currentThemeId, setCurrentThemeId] = useState(() => localStorage.getItem("app_theme_v17") || 'blue');
             const theme = THEMES[currentThemeId];
+            const [activeTab, setActiveTab] = useState('assess'); // 'assess' | 'list'
 
             const [folders, setFolders] = useState(() => {
                 const saved = localStorage.getItem("video_reviews_data_v24");
-                const oldSaved = localStorage.getItem("video_reviews_data_v23");
-                if (saved) return JSON.parse(saved);
-                if (oldSaved) return JSON.parse(oldSaved);
-                return [{ id: 'default_1', name: 'Lớp 5A', reviews: [] }];
+                return saved ? JSON.parse(saved) : [{ id: 'default_1', name: 'Lớp 5A', reviews: [] }];
             });
             const [activeFolderId, setActiveFolderId] = useState(() => localStorage.getItem("active_folder_id_v24") || folders[0].id);
             
-            const [currentFile, setCurrentFile] = useState(null);
-            const [videoUrl, setVideoUrl] = useState(null);
-            const [presenterName, setPresenterName] = useState("");
+            // --- VIDEO QUEUE STATE ---
+            const [videoQueue, setVideoQueue] = useState([]);
+            const [currentVideoId, setCurrentVideoId] = useState(null);
+            
+            const currentVideo = videoQueue.find(v => v.id === currentVideoId);
+            const videoUrl = currentVideo?.url || null;
 
+            const [presenterName, setPresenterName] = useState("");
             const [pros, setPros] = useState("");
             const [cons, setCons] = useState("");
             const [searchTerm, setSearchTerm] = useState("");
-            
-            // --- EDIT MODE STATE ---
             const [editingKey, setEditingKey] = useState(null);
 
-            // --- AI KEY & CUSTOM PROMPT STATE ---
             const [apiKey, setApiKey] = useState(() => localStorage.getItem("gemini_api_key") || "");
             const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem("ai_custom_prompt") || "");
             const [showSettings, setShowSettings] = useState(false);
@@ -405,19 +387,19 @@
                 );
             }, [reviews, searchTerm]);
 
+            // --- SUGGESTION TAGS ---
             const suggestionTags = {
                 pros: {
-                    "Kiến Thức": ["Em nắm chắc nội dung bài học", "Biết mở rộng kiến thức thực tế", "Sử dụng từ ngữ chính xác", "Bố cục bài nói rõ ràng", "Phân tích sơ đồ logic"],
-                    "Kỹ Năng": ["Giọng nói to, rõ ràng", "Phong thái tự tin, chững chạc", "Tương tác mắt tốt với người nghe", "Kết hợp cử chỉ tay tự nhiên", "Làm chủ tốt thời gian"]
+                    "Kiến Thức": ["Nắm chắc nội dung", "Sử dụng thuật ngữ đúng", "Bố cục logic", "Phân tích sâu", "Có ví dụ thực tế"],
+                    "Kỹ Năng": ["Giọng to rõ", "Phong thái tự tin", "Mắt nhìn người nghe", "Ngôn ngữ cơ thể tốt", "Dùng que chỉ dứt khoát"],
+                    "Cảm Xúc": ["Nhiệt tình", "Truyền cảm", "Thu hút"]
                 },
                 cons: {
-                    "Nội Dung": ["Em cần tìm hiểu kỹ hơn sơ đồ", "Nên sắp xếp ý mạch lạc hơn", "Cần mở rộng thêm ví dụ thực tế", "Tránh lặp lại ý"],
-                    "Phong Thái": ["Cần tự tin hơn khi trình bày", "Nên nói to hơn để cả lớp cùng nghe", "Hạn chế nhìn vào tài liệu", "Cần tương tác nhiều hơn với người nghe"],
-                    "Hình Thức": ["Chú ý vị trí đứng không che bảng", "Thao tác chỉ que cần dứt khoát hơn", "Cần giữ máy quay ổn định", "Chú ý ánh sáng khi quay"]
+                    "Nội Dung": ["Cần tìm hiểu kỹ hơn", "Sắp xếp ý chưa mạch lạc", "Thiếu ví dụ", "Còn đọc tài liệu nhiều"],
+                    "Kỹ Thuật": ["Nói hơi nhỏ", "Tốc độ quá nhanh", "Ít tương tác mắt", "Che mất bảng/sơ đồ", "Đứng chưa nghiêm túc"]
                 }
             };
 
-            // Sync Theme & Save Data
             useEffect(() => {
                 localStorage.setItem("app_theme_v17", currentThemeId);
                 document.body.className = theme.bg;
@@ -428,21 +410,51 @@
                 localStorage.setItem("active_folder_id_v24", activeFolderId);
             }, [folders, activeFolderId]);
 
-            // Handlers
-            const handleFileChange = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    setCurrentFile(file);
-                    setVideoUrl(URL.createObjectURL(file));
-                    if (!editingKey) { 
-                        setPros(""); setCons("");
-                        setPresenterName(file.name.replace(/\.[^/.]+$/, ""));
+            const handleBatchFileChange = (e) => {
+                const files = Array.from(e.target.files);
+                if (files.length === 0) return;
+                const newQueueItems = files.map(file => ({
+                    id: Date.now() + Math.random(),
+                    file: file,
+                    url: URL.createObjectURL(file),
+                    name: file.name
+                }));
+                const firstNewVideoId = newQueueItems[0].id;
+                
+                if (!currentVideoId) {
+                     setPresenterName(newQueueItems[0].name.replace(/\.[^/.]+$/, ""));
+                     setCurrentVideoId(firstNewVideoId);
+                }
+                setVideoQueue(prev => [...prev, ...newQueueItems]);
+            };
+
+            const openVideoFromQueue = (id) => {
+                const videoToOpen = videoQueue.find(v => v.id === id);
+                if (videoToOpen) {
+                    setCurrentVideoId(id);
+                    if (!editingKey) {
+                        setPresenterName(videoToOpen.name.replace(/\.[^/.]+$/, ""));
+                        setPros("");
+                        setCons("");
                     }
                 }
             };
 
+            const deleteVideoFromQueue = (id) => {
+                const updatedQueue = videoQueue.filter(v => v.id !== id);
+                setVideoQueue(updatedQueue);
+                if (currentVideoId === id) {
+                    if (updatedQueue.length > 0) openVideoFromQueue(updatedQueue[0].id);
+                    else {
+                        setCurrentVideoId(null);
+                        setPresenterName("");
+                    }
+                }
+            };
+
+            // Folder Handlers
             const createFolder = () => {
-                const name = prompt("Tên lớp mới (ví dụ: Lớp 5B):");
+                const name = prompt("Tên lớp mới:");
                 if (name) {
                     const newF = { id: 'f_' + Date.now(), name, reviews: [] };
                     setFolders([...folders, newF]); setActiveFolderId(newF.id);
@@ -460,7 +472,7 @@
                 }
             };
 
-            // --- BACKUP & RESTORE FUNCTIONS ---
+            // Export/Import
             const handleExportData = () => {
                 const dataStr = JSON.stringify(folders, null, 2);
                 const blob = new Blob([dataStr], { type: 'application/json' });
@@ -481,64 +493,53 @@
                     try {
                         const importedData = JSON.parse(event.target.result);
                         if (Array.isArray(importedData)) {
-                            if (confirm("Bạn có chắc muốn khôi phục dữ liệu? Dữ liệu hiện tại sẽ bị thay thế.")) {
+                            if (confirm("Khôi phục dữ liệu? Dữ liệu hiện tại sẽ mất.")) {
                                 setFolders(importedData);
                                 setActiveFolderId(importedData[0]?.id);
-                                alert("Khôi phục dữ liệu thành công!");
+                                alert("Thành công!");
                             }
-                        } else {
-                            alert("File dữ liệu không hợp lệ.");
-                        }
-                    } catch (err) {
-                        alert("Lỗi khi đọc file: " + err.message);
-                    }
+                        } else alert("File lỗi.");
+                    } catch (err) { alert("Lỗi đọc file."); }
                 };
                 reader.readAsText(file);
                 e.target.value = null;
             };
 
-            // --- SAVE / UPDATE LOGIC ---
             const handleSave = () => {
                 if (!presenterName) return alert("Vui lòng nhập tên học sinh!");
-                if (!editingKey && !currentFile && !presenterName) return alert("Chưa có video hoặc tên học sinh!");
-
                 if (editingKey) {
                     const updatedFolders = folders.map(f => {
                         if (f.id === activeFolderId) {
                             return {
                                 ...f,
-                                reviews: f.reviews.map(r => {
-                                    if (r.key === editingKey) {
-                                        return {
-                                            ...r,
-                                            presenter: presenterName,
-                                            pros: pros,
-                                            cons: cons,
-                                            fileName: currentFile ? currentFile.name : r.fileName
-                                        };
-                                    }
-                                    return r;
-                                })
+                                reviews: f.reviews.map(r => r.key === editingKey ? { ...r, presenter: presenterName, pros, cons } : r)
                             };
                         }
                         return f;
                     });
                     setFolders(updatedFolders);
                     setEditingKey(null);
-                    alert("Đã cập nhật thành công!");
+                    alert("Đã cập nhật!");
                 } else {
                     const newId = (reviews.length > 0 ? Math.max(...reviews.map(r => r.id)) : 0) + 1;
                     const newRev = {
                         key: Date.now(), id: newId, 
-                        fileName: currentFile?.name || "N/A", 
-                        presenter: presenterName || "Học sinh",
+                        fileName: currentVideo?.name || "N/A", 
+                        presenter: presenterName,
                         pros: pros, cons: cons,
                         date: new Date().toLocaleString('vi-VN')
                     };
                     setFolders(folders.map(f => f.id === activeFolderId ? { ...f, reviews: [newRev, ...f.reviews] } : f));
                     alert(`Đã lưu bài của em ${presenterName}!`);
+                    
+                    if (currentVideo) {
+                        const currentIndex = videoQueue.findIndex(v => v.id === currentVideoId);
+                        if (currentIndex !== -1 && currentIndex < videoQueue.length - 1) {
+                            openVideoFromQueue(videoQueue[currentIndex + 1].id);
+                        }
+                    }
                 }
-                setPros(""); setCons(""); setPresenterName(""); setEditingKey(null); 
+                if (!editingKey) { setPros(""); setCons(""); setPresenterName(""); }
             };
 
             const handleEdit = (review) => {
@@ -546,7 +547,8 @@
                 setPresenterName(review.presenter);
                 setPros(review.pros);
                 setCons(review.cons);
-                alert(`Đang sửa bài của: ${review.presenter}`);
+                setActiveTab('assess'); // Switch to Assess tab automatically
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
             const cancelEdit = () => {
@@ -558,214 +560,187 @@
                 const wb = XLSX.utils.book_new();
                 folders.forEach(f => {
                     if(!f.reviews.length) return;
-                    const data = [...f.reviews].sort((a,b)=>a.id-b.id).map(r => ({
-                        "STT": r.id, 
-                        "Học Sinh": r.presenter, 
-                        "Ưu Điểm": r.pros, 
-                        "Góp Ý": r.cons
-                    }));
+                    const data = [...f.reviews].sort((a,b)=>a.id-b.id).map(r => ({ "STT": r.id, "Học Sinh": r.presenter, "Ưu Điểm": r.pros, "Góp Ý": r.cons }));
                     const ws = XLSX.utils.json_to_sheet(data);
-                    // Updated cols: STT(5), Name(25), Pros(50), Cons(50)
                     ws['!cols'] = [{wch:5}, {wch:25}, {wch:50}, {wch:50}];
-                    let sheetName = f.name.replace(/[\\/?*[\]]/g,"").slice(0,30);
-                    if(wb.SheetNames.includes(sheetName)) sheetName += `_${f.id.slice(-3)}`;
-                    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+                    XLSX.utils.book_append_sheet(wb, ws, f.name.slice(0,30));
                 });
-                XLSX.writeFile(wb, `Danh_Gia_Hoc_Sinh_${new Date().getTime()}.xlsx`);
+                XLSX.writeFile(wb, `Danh_Gia_${new Date().getTime()}.xlsx`);
             };
-
-            // Video height calculation
-            const videoHeightClass = "h-[60vh] min-h-[400px]";
 
             return (
                 <div className={`min-h-screen p-4 flex flex-col ${theme.bg} transition-colors duration-300`}>
-                    <div className="w-full mx-auto space-y-6 flex-grow flex flex-col">
+                    <div className="w-full max-w-[1920px] mx-auto space-y-4 flex-grow flex flex-col">
                         
                         {/* HEADER */}
-                        <div className={`${theme.headerBg} p-4 rounded-xl shadow-sm border ${theme.headerBorder} flex flex-col lg:flex-row justify-between items-center gap-4 shrink-0 transition-colors`}>
-                            <h1 className={`text-2xl font-bold ${theme.textMain} flex items-center gap-3`}>
-                                <span className={`${theme.accentBg} p-2 rounded-xl`}>
-                                    <Icon name="check-square" className={`w-8 h-8 ${theme.accent}`} />
-                                </span>
-                                Chấm Video Thuyết Trình
+                        <div className={`${theme.headerBg} p-3 rounded-xl shadow-sm border ${theme.headerBorder} flex flex-col lg:flex-row justify-between items-center gap-4 shrink-0`}>
+                            <h1 className={`text-xl font-bold ${theme.textMain} flex items-center gap-2`}>
+                                <span className={`${theme.accentBg} p-1.5 rounded-lg`}><Icon name="check-square" className={`w-6 h-6 ${theme.accent}`} /></span>
+                                Chấm Video V31
                             </h1>
-
                             <div className="flex flex-wrap justify-center items-center gap-4">
-                                {/* Settings & Data */}
                                 <div className="flex gap-2">
-                                    <button onClick={() => setShowSettings(true)} className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg`} title="Cài đặt AI & Tùy biến"><Icon name="settings" className="w-5 h-5" /></button>
-                                    <button onClick={handleExportData} className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg`} title="Sao lưu dữ liệu"><Icon name="download" className="w-5 h-5" /></button>
-                                    <label className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg cursor-pointer`} title="Khôi phục dữ liệu">
-                                        <Icon name="upload" className="w-5 h-5" />
-                                        <input type="file" accept=".json" onChange={handleImportData} className="hidden" ref={fileInputRef} />
-                                    </label>
+                                    <button onClick={() => setShowSettings(true)} className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg`} title="Cài đặt AI"><Icon name="settings" /></button>
+                                    <button onClick={handleExportData} className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg`} title="Sao lưu"><Icon name="download" /></button>
+                                    <label className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg cursor-pointer`} title="Khôi phục"><Icon name="upload" /><input type="file" accept=".json" onChange={handleImportData} className="hidden" /></label>
                                 </div>
-
                                 <div className={`h-6 w-px ${theme.isDark ? 'bg-slate-600' : 'bg-slate-200'}`}></div>
-
-                                {/* Theme Selector */}
-                                <div className={`flex items-center gap-2 ${theme.accentBg} p-2 rounded-xl border ${theme.headerBorder}`}>
+                                <div className={`flex items-center gap-2 ${theme.accentBg} p-1.5 rounded-lg border ${theme.headerBorder}`}>
                                     {Object.values(THEMES).map(t => (
-                                        <button 
-                                            key={t.id}
-                                            onClick={() => setCurrentThemeId(t.id)}
-                                            className={`w-6 h-6 rounded-full border-2 transition-all ${currentThemeId === t.id ? 'border-blue-500 scale-125 shadow-md' : 'border-transparent opacity-70 hover:opacity-100'}`}
-                                            style={{ backgroundColor: t.isDark ? '#334155' : (t.id === 'blue' ? '#3b82f6' : t.id === 'rose' ? '#f43f5e' : t.id === 'teal' ? '#14b8a6' : '#f59e0b') }}
-                                            title={t.name}
-                                        ></button>
+                                        <button key={t.id} onClick={() => setCurrentThemeId(t.id)} className={`w-5 h-5 rounded-full border-2 transition-all ${currentThemeId === t.id ? 'border-blue-500 scale-125' : 'border-transparent opacity-70'}`} style={{ backgroundColor: t.isDark ? '#334155' : (t.id === 'blue' ? '#3b82f6' : t.id === 'rose' ? '#f43f5e' : t.id === 'teal' ? '#14b8a6' : '#f59e0b') }}></button>
                                     ))}
                                 </div>
-
-                                {/* Folder Tools */}
-                                <div className={`flex items-center gap-3 ${theme.isDark ? 'bg-slate-700' : 'bg-slate-100'} p-2 rounded-xl border ${theme.headerBorder}`}>
-                                    <Icon name="folder-open" className={`w-5 h-5 ${theme.textSub}`} />
-                                    <select value={activeFolderId} onChange={e=>setActiveFolderId(e.target.value)} className={`bg-transparent font-bold ${theme.textMain} outline-none cursor-pointer min-w-[150px] text-lg`}>
-                                        {folders.map(f => <option key={f.id} value={f.id} className={theme.isDark ? 'bg-slate-800' : ''}>{f.name} ({f.reviews.length})</option>)}
+                                <div className={`flex items-center gap-3 ${theme.isDark ? 'bg-slate-700' : 'bg-slate-100'} p-1.5 rounded-lg border ${theme.headerBorder}`}>
+                                    <select value={activeFolderId} onChange={e=>setActiveFolderId(e.target.value)} className={`bg-transparent font-bold ${theme.textMain} outline-none cursor-pointer min-w-[120px] text-sm`}>
+                                        {folders.map(f => <option key={f.id} value={f.id} className="text-black">{f.name} ({f.reviews.length})</option>)}
                                     </select>
-                                    <div className={`h-6 w-px ${theme.isDark ? 'bg-slate-600' : 'bg-slate-300'} mx-2`}></div>
-                                    <button onClick={createFolder} className={`p-2 ${theme.textMain} hover:${theme.accentBg} rounded-lg`} title="Tạo lớp mới"><Icon name="plus" className="w-5 h-5" /></button>
-                                    <button onClick={renameFolder} className={`p-2 ${theme.textMain} hover:${theme.accentBg} rounded-lg`} title="Đổi tên lớp"><Icon name="pencil" className="w-5 h-5" /></button>
-                                    <button onClick={deleteFolder} className={`p-2 text-red-500 hover:bg-red-50 rounded-lg`} title="Xóa lớp"><Icon name="trash-2" className="w-5 h-5" /></button>
+                                    <button onClick={createFolder} className={`p-1.5 ${theme.textMain} hover:${theme.accentBg} rounded-lg`}><Icon name="plus" className="w-4 h-4" /></button>
+                                    <button onClick={renameFolder} className={`p-1.5 ${theme.textMain} hover:${theme.accentBg} rounded-lg`}><Icon name="pencil" className="w-4 h-4" /></button>
+                                    <button onClick={deleteFolder} className={`p-1.5 text-red-500 hover:bg-red-50 rounded-lg`}><Icon name="trash-2" className="w-4 h-4" /></button>
                                 </div>
                             </div>
                         </div>
 
-                        {/* TOP SECTION: VIDEO & FORM (SIDE BY SIDE) */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* MAIN LAYOUT: 2 COLUMNS WITH STICKY LEFT */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                             
-                            {/* LEFT: VIDEO PLAYER */}
-                            <div className={`rounded-2xl shadow-lg overflow-hidden flex flex-col border ${theme.isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'} ${videoHeightClass}`}>
-                                <div className="flex-grow flex items-center justify-center bg-black min-h-0 relative">
-                                    {videoUrl ? (
-                                        <video ref={videoRef} src={videoUrl} controls className="w-full h-full object-contain" />
-                                    ) : (
-                                        <div className="text-gray-500 text-center flex flex-col items-center p-10">
-                                            <Icon name="upload" className="w-16 h-16 mb-4 opacity-50 text-white" />
-                                            <p className="text-lg text-slate-400">Chọn video để bắt đầu</p>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className={`p-4 border-t ${theme.isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-100 bg-white'} shrink-0 z-10 flex items-center justify-between`}>
-                                    <label className={`cursor-pointer px-6 py-2.5 rounded-full text-sm font-bold shadow-md transition-all active:scale-95 ${theme.buttonPrimary} flex items-center gap-2`}>
-                                        <Icon name="folder-up" className="w-5 h-5" />
-                                        <span>{currentFile ? "Đổi Video Khác" : "Chọn Video Bài Làm"}</span>
-                                        <input type="file" accept="video/*" onChange={handleFileChange} onClick={e=>e.target.value=null} className="hidden" />
-                                    </label>
-                                    {currentFile && <span className={`text-sm truncate max-w-[200px] ${theme.textSub} font-medium`}>{currentFile.name}</span>}
-                                </div>
-                            </div>
-
-                            {/* RIGHT: INPUT FORM */}
-                            <div className={`${theme.cardBg} rounded-2xl shadow-lg border ${theme.cardBorder} flex flex-col overflow-hidden transition-colors ${videoHeightClass} relative`}>
-                                {editingKey && (
-                                    <div className="absolute top-0 left-0 w-full bg-orange-100 text-orange-700 px-4 py-1 text-xs font-bold text-center z-20 border-b border-orange-200 flex justify-between items-center">
-                                        <span>ĐANG CHỈNH SỬA: {presenterName}</span>
-                                        <button onClick={cancelEdit} className="hover:text-red-600 underline">Hủy Bỏ</button>
-                                    </div>
-                                )}
-                                
-                                {/* Name Input */}
-                                <div className={`p-5 border-b ${theme.isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-100 bg-slate-50'} shrink-0 mt-${editingKey ? '6' : '0'}`}>
-                                    <label className={`block text-xs font-bold uppercase mb-2 ml-1 ${theme.textSub}`}>Họ và tên học sinh:</label>
-                                    <input type="text" value={presenterName} onChange={e=>setPresenterName(e.target.value)} placeholder="Nhập tên học sinh..." className={`w-full ${theme.inputBg} border ${theme.inputBorder} rounded-xl px-5 py-3 font-bold text-xl focus:ring-2 focus:ring-opacity-50 focus:outline-none ${theme.textMain} placeholder-slate-400 shadow-sm`} />
-                                </div>
-
-                                {/* Review Boxes */}
-                                <div className={`flex-grow overflow-y-auto p-5 space-y-6 custom-scrollbar ${theme.isDark ? 'bg-slate-900/50' : 'bg-slate-50/30'}`}>
-                                    <div className="h-[400px]"> 
-                                        <SimpleInputSection 
-                                            title="Ưu Điểm" iconName="check-circle-2" color="green" tags={suggestionTags.pros} state={pros} setState={setPros} videoRef={videoRef} theme={theme} 
-                                            apiKey={apiKey} openSettings={()=>setShowSettings(true)} customPrompt={customPrompt} type="pros" 
-                                        />
-                                    </div>
-                                    <div className="h-[400px]"> 
-                                        <SimpleInputSection 
-                                            title="Góp Ý / Hạn Chế" iconName="message-circle" color="blue" tags={suggestionTags.cons} state={cons} setState={setCons} videoRef={videoRef} theme={theme} 
-                                            apiKey={apiKey} openSettings={()=>setShowSettings(true)} customPrompt={customPrompt} type="cons" 
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Footer Save */}
-                                <div className={`p-4 border-t ${theme.isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-100 bg-slate-50'} flex justify-end items-center shrink-0 shadow-inner z-10`}>
-                                    <div className="flex gap-2">
-                                        {editingKey && (
-                                            <button onClick={cancelEdit} className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-200 transition-all">Hủy</button>
-                                        )}
-                                        <button onClick={handleSave} className={`${theme.buttonPrimary} px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transform active:scale-95 transition-all`}>
-                                            <Icon name={editingKey ? "rotate-ccw" : "save"} className="w-5 h-5" /> {editingKey ? "CẬP NHẬT" : "LƯU KẾT QUẢ"}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* BOTTOM SECTION: LIST (FULL WIDTH) */}
-                        <div className={`${theme.cardBg} rounded-2xl shadow-lg border ${theme.cardBorder} p-6 flex flex-col transition-colors min-h-[300px]`}>
-                            <div className="flex flex-col md:flex-row justify-between items-center mb-4 shrink-0 gap-3">
-                                <h2 className={`font-bold text-xl ${theme.textMain} flex items-center gap-3`}>
-                                    <Icon name="list" className={`w-6 h-6 ${theme.textSub}`} /> 
-                                    Danh Sách Đã Chấm ({filteredReviews.length})
-                                </h2>
-                                
-                                <div className="flex items-center gap-3 w-full md:w-auto">
-                                    {/* Search Input */}
-                                    <div className={`flex items-center gap-2 ${theme.inputBg} border ${theme.inputBorder} px-3 py-2 rounded-lg w-full md:w-64 transition-colors`}>
-                                        <Icon name="search" className={`w-4 h-4 ${theme.textSub}`} />
-                                        <input 
-                                            type="text" 
-                                            placeholder="Tìm tên học sinh..." 
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className={`bg-transparent outline-none text-sm w-full ${theme.textMain} placeholder-gray-400`}
-                                        />
-                                        {searchTerm && (
-                                            <button onClick={() => setSearchTerm("")} className="text-gray-400 hover:text-red-500">
-                                                <Icon name="x" className="w-4 h-4" />
-                                            </button>
+                            {/* LEFT COLUMN: STICKY (Video Player & Playlist) */}
+                            <div className="lg:col-span-5 flex flex-col gap-4 sticky top-4 self-start h-[calc(100vh-2rem)] overflow-hidden">
+                                {/* Video Player - Fixed Height Ratio */}
+                                <div className={`rounded-xl shadow-lg overflow-hidden flex flex-col border ${theme.isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'} shrink-0 aspect-video max-h-[40vh]`}>
+                                    <div className="flex-grow flex items-center justify-center bg-black min-h-0 relative h-full">
+                                        {videoUrl ? (
+                                            <video key={videoUrl} ref={videoRef} src={videoUrl} controls className="w-full h-full object-contain" />
+                                        ) : (
+                                            <div className="text-gray-500 text-center flex flex-col items-center p-10">
+                                                <Icon name="monitor-play" className="w-12 h-12 mb-3 opacity-50 text-white" />
+                                                <p className="text-sm text-slate-400">Chọn video để phát</p>
+                                            </div>
                                         )}
                                     </div>
+                                </div>
 
-                                    <button onClick={exportAllExcel} className={`${theme.buttonSecondary} px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm transition-all hover:shadow-md whitespace-nowrap`}>
-                                        <Icon name="file-spreadsheet" className="w-4 h-4" /> Xuất Excel
+                                {/* Playlist - Takes remaining height */}
+                                <PlaylistSection 
+                                    queue={videoQueue} 
+                                    currentId={currentVideoId} 
+                                    onSelect={openVideoFromQueue}
+                                    onDelete={deleteVideoFromQueue}
+                                    onUpload={handleBatchFileChange}
+                                    theme={theme}
+                                />
+                            </div>
+
+                            {/* RIGHT COLUMN: SCROLLABLE TABS */}
+                            <div className="lg:col-span-7 flex flex-col gap-4 min-h-0">
+                                
+                                {/* TABS NAVIGATION */}
+                                <div className={`flex p-1 rounded-xl ${theme.isDark ? 'bg-slate-800' : 'bg-slate-200'} self-start`}>
+                                    <button 
+                                        onClick={() => setActiveTab('assess')}
+                                        className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'assess' ? `${theme.cardBg} ${theme.accent} shadow-sm` : `${theme.textSub} hover:${theme.textMain}`}`}
+                                    >
+                                        <Icon name="edit-3" className="w-4 h-4" /> Chấm Bài
+                                    </button>
+                                    <button 
+                                        onClick={() => setActiveTab('list')}
+                                        className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'list' ? `${theme.cardBg} ${theme.accent} shadow-sm` : `${theme.textSub} hover:${theme.textMain}`}`}
+                                    >
+                                        <Icon name="list" className="w-4 h-4" /> Danh Sách Đã Chấm ({filteredReviews.length})
                                     </button>
                                 </div>
-                            </div>
-                            
-                            {/* Table Container */}
-                            <div className="overflow-x-auto custom-scrollbar flex-grow rounded-xl border border-slate-200/50">
-                                <table className="w-full text-left border-collapse">
-                                    <thead className={`${theme.isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'} uppercase font-bold text-sm sticky top-0 z-10`}>
-                                        <tr>
-                                            <th className="px-4 py-4 text-center w-16">#</th>
-                                            <th className="px-4 py-4 w-1/4">Học Sinh</th>
-                                            <th className="px-4 py-4 w-1/3">Ưu Điểm</th>
-                                            <th className="px-4 py-4 w-1/3">Góp Ý</th>
-                                            <th className="px-4 py-4 text-center w-24">Thao Tác</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className={`divide-y ${theme.isDark ? 'divide-slate-700' : 'divide-slate-100'} text-sm`}>
-                                        {filteredReviews.length === 0 ? <tr><td colSpan="6" className={`text-center py-12 ${theme.textSub} italic text-lg`}>Không tìm thấy kết quả</td></tr> : 
-                                        [...filteredReviews].reverse().map(r => (
-                                            <tr key={r.key} className={`${theme.isDark ? 'hover:bg-slate-700' : 'hover:bg-blue-50'} group transition-colors`}>
-                                                <td className={`px-4 py-4 text-center ${theme.textSub} font-mono`}>{r.id}</td>
-                                                <td className={`px-4 py-4 font-bold ${theme.textMain} align-top`}>
-                                                    <div className="text-base">{r.presenter}</div>
-                                                    <div className={`text-xs ${theme.textSub} mt-1 font-normal`}>{r.date}</div>
-                                                    {r.fileName !== "N/A" && <div className={`text-xs ${theme.textSub} mt-0.5 truncate max-w-[200px]`}>File: {r.fileName}</div>}
-                                                </td>
-                                                <td className={`px-4 py-4 ${theme.textMain} whitespace-pre-line align-top leading-relaxed`}>{r.pros}</td>
-                                                <td className={`px-4 py-4 ${theme.textMain} whitespace-pre-line align-top leading-relaxed`}>{r.cons}</td>
-                                                <td className="px-4 py-4 text-center align-top pt-4">
-                                                    <div className="flex justify-center gap-1">
-                                                        <button onClick={() => handleEdit(r)} className="text-slate-400 hover:text-blue-500 p-2 rounded-full hover:bg-blue-50 transition-all" title="Sửa"><Icon name="pencil" className="w-4 h-4" /></button>
-                                                        <button onClick={() => {if(confirm("Xóa nhận xét này?")) setFolders(folders.map(f=>f.id===activeFolderId?{...f,reviews:f.reviews.filter(rev=>rev.key!==r.key)}:f))}} className="text-slate-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-all" title="Xóa"><Icon name="trash-2" className="w-4 h-4" /></button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+
+                                {/* TAB CONTENT */}
+                                {activeTab === 'assess' && (
+                                    <div className={`${theme.cardBg} rounded-2xl shadow-lg border ${theme.cardBorder} p-6 relative animate-fadeIn`}>
+                                        {editingKey && (
+                                            <div className="absolute top-0 left-0 w-full bg-orange-100 text-orange-700 px-4 py-2 text-sm font-bold text-center border-b border-orange-200 rounded-t-2xl flex justify-between items-center animate-pulse">
+                                                <span>ĐANG CHỈNH SỬA: {presenterName}</span>
+                                                <button onClick={cancelEdit} className="hover:text-red-600 underline">Thoát</button>
+                                            </div>
+                                        )}
+
+                                        <div className={`mb-6 ${editingKey ? 'mt-8' : ''}`}>
+                                            <label className={`block text-xs font-bold uppercase mb-2 ${theme.textSub}`}>Họ và tên học sinh:</label>
+                                            <input type="text" value={presenterName} onChange={e=>setPresenterName(e.target.value)} placeholder="Nhập tên học sinh..." className={`w-full ${theme.inputBg} border ${theme.inputBorder} rounded-xl px-5 py-4 font-bold text-2xl focus:ring-2 focus:ring-opacity-50 focus:outline-none ${theme.textMain} placeholder-slate-400 shadow-sm`} />
+                                        </div>
+
+                                        <div className="flex flex-col gap-6">
+                                            <div className="w-full min-h-[300px]">
+                                                <SimpleInputSection 
+                                                    title="Ưu Điểm (Điểm Đạt)" iconName="check-circle-2" color="green" tags={suggestionTags.pros} state={pros} setState={setPros} videoRef={videoRef} theme={theme} 
+                                                    apiKey={apiKey} openSettings={()=>setShowSettings(true)} customPrompt={customPrompt} type="pros" 
+                                                />
+                                            </div>
+                                            <div className="w-full min-h-[300px]">
+                                                <SimpleInputSection 
+                                                    title="Góp Ý / Hạn Chế" iconName="message-circle" color="blue" tags={suggestionTags.cons} state={cons} setState={setCons} videoRef={videoRef} theme={theme} 
+                                                    apiKey={apiKey} openSettings={()=>setShowSettings(true)} customPrompt={customPrompt} type="cons" 
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-8 flex justify-end gap-3 sticky bottom-0 bg-opacity-90 backdrop-blur-sm py-4 border-t border-dashed border-gray-200">
+                                            {editingKey && <button onClick={cancelEdit} className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-200 transition-all">Hủy</button>}
+                                            <button onClick={handleSave} className={`${theme.buttonPrimary} px-10 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transform active:scale-95 transition-all text-lg`}>
+                                                <Icon name={editingKey ? "rotate-ccw" : "save"} className="w-6 h-6" /> {editingKey ? "CẬP NHẬT" : "LƯU KẾT QUẢ"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'list' && (
+                                    <div className={`${theme.cardBg} rounded-2xl shadow-lg border ${theme.cardBorder} p-6 flex flex-col transition-colors animate-fadeIn min-h-[600px]`}>
+                                        <div className="flex flex-col md:flex-row justify-between items-center mb-4 shrink-0 gap-3">
+                                            <div className="flex items-center gap-3 w-full md:w-auto flex-grow">
+                                                <div className={`flex items-center gap-2 ${theme.inputBg} border ${theme.inputBorder} px-3 py-2 rounded-lg w-full`}>
+                                                    <Icon name="search" className={theme.textSub} />
+                                                    <input type="text" placeholder="Tìm kiếm tên học sinh..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`bg-transparent outline-none text-sm w-full ${theme.textMain}`} />
+                                                    {searchTerm && <button onClick={() => setSearchTerm("")}><Icon name="x" className="w-4 h-4 text-gray-400" /></button>}
+                                                </div>
+                                            </div>
+                                            <button onClick={exportAllExcel} className={`${theme.buttonSecondary} px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 whitespace-nowrap`}>
+                                                <Icon name="file-spreadsheet" /> Xuất Excel
+                                            </button>
+                                        </div>
+                                        
+                                        <div className="overflow-x-auto custom-scrollbar flex-grow rounded-xl border border-slate-200/50">
+                                            <table className="w-full text-left border-collapse relative">
+                                                <thead className={`${theme.isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'} uppercase font-bold text-sm sticky top-0 z-10 shadow-sm`}>
+                                                    <tr>
+                                                        <th className="px-4 py-4 text-center w-12">#</th>
+                                                        <th className="px-4 py-4 w-1/5">Học Sinh</th>
+                                                        <th className="px-4 py-4 w-1/3">Ưu Điểm</th>
+                                                        <th className="px-4 py-4 w-1/3">Góp Ý</th>
+                                                        <th className="px-4 py-4 text-center w-24">Thao Tác</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className={`divide-y ${theme.isDark ? 'divide-slate-700' : 'divide-slate-100'} text-sm`}>
+                                                    {filteredReviews.length === 0 ? <tr><td colSpan="6" className={`text-center py-12 ${theme.textSub} italic`}>Chưa có dữ liệu</td></tr> : 
+                                                    [...filteredReviews].reverse().map(r => (
+                                                        <tr key={r.key} className={`${theme.isDark ? 'hover:bg-slate-700' : 'hover:bg-blue-50'} transition-colors group`}>
+                                                            <td className={`px-4 py-4 text-center ${theme.textSub}`}>{r.id}</td>
+                                                            <td className={`px-4 py-4 font-bold ${theme.textMain} align-top`}>
+                                                                <div className="text-base">{r.presenter}</div>
+                                                                <div className={`text-xs ${theme.textSub} mt-1 font-normal flex items-center gap-1`}>
+                                                                    <Icon name="clock" className="w-3 h-3" /> {r.date}
+                                                                </div>
+                                                            </td>
+                                                            <td className={`px-4 py-4 ${theme.textMain} whitespace-pre-line align-top`}>{r.pros}</td>
+                                                            <td className={`px-4 py-4 ${theme.textMain} whitespace-pre-line align-top`}>{r.cons}</td>
+                                                            <td className="px-4 py-4 text-center align-top pt-4">
+                                                                <div className="flex justify-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                                                                    <button onClick={() => handleEdit(r)} className="text-blue-600 bg-blue-50 p-2 rounded-lg hover:bg-blue-100" title="Sửa"><Icon name="pencil" /></button>
+                                                                    <button onClick={() => {if(confirm("Xóa?")) setFolders(folders.map(f=>f.id===activeFolderId?{...f,reviews:f.reviews.filter(rev=>rev.key!==r.key)}:f))}} className="text-red-600 bg-red-50 p-2 rounded-lg hover:bg-red-100" title="Xóa"><Icon name="trash-2" /></button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
