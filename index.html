@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Công cụ hộ trợ nhận xét bài</title>
+    <title>Công Cụ Đánh Giá Video (V33 - Thêm Nhiều Gợi Ý)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -25,7 +25,7 @@
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             transition: background-color 0.3s ease;
-            overflow-x: hidden; /* Prevent horizontal scroll */
+            overflow-x: hidden;
         }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -387,16 +387,36 @@
                 );
             }, [reviews, searchTerm]);
 
-            // --- SUGGESTION TAGS ---
+            // --- SUGGESTION TAGS (UPDATED V33 - 15 ITEMS) ---
             const suggestionTags = {
                 pros: {
-                    "Kiến Thức": ["Nắm chắc nội dung", "Sử dụng thuật ngữ đúng", "Bố cục logic", "Phân tích sâu", "Có ví dụ thực tế"],
-                    "Kỹ Năng": ["Giọng to rõ", "Phong thái tự tin", "Mắt nhìn người nghe", "Ngôn ngữ cơ thể tốt", "Dùng que chỉ dứt khoát"],
-                    "Cảm Xúc": ["Nhiệt tình", "Truyền cảm", "Thu hút"]
+                    "Nội Dung": [
+                        "Nắm chắc kiến thức", "Nội dung chi tiết", "Bố cục logic", "Liên hệ thực tế hay", "Phân tích sâu sắc",
+                        "Trình bày mạch lạc", "Thông tin chính xác", "Có sự chuẩn bị kỹ", "Giải thích rõ ràng", "Lập luận chặt chẽ",
+                        "Mở rộng vấn đề tốt", "Dẫn chứng sinh động", "Sắp xếp ý khoa học", "Trọng tâm rõ ràng", "Hiểu sâu vấn đề"
+                    ],
+                    "Hình Thức": [
+                        "Giọng to rõ", "Phong thái tự tin", "Trang phục gọn gàng", "Tương tác mắt tốt", "Dùng que chỉ dứt khoát",
+                        "Biểu cảm tươi tắn", "Ngôn ngữ cơ thể tốt", "Tốc độ nói vừa phải", "Ngắt nghỉ hợp lý", "Đứng dáng đẹp",
+                        "Cử chỉ tự nhiên", "Bao quát lớp tốt", "Giọng nói truyền cảm", "Phát âm chuẩn", "Làm chủ sân khấu"
+                    ],
+                    "Khác": [
+                        "Sáng tạo", "Lôi cuốn", "Nhiệt tình", "Tự nhiên", "Hài hước duyên dáng",
+                        "Có điểm nhấn riêng", "Tương tác tốt", "Sử dụng đồ dùng tốt", "Slide đẹp mắt", "Minh họa sinh động",
+                        "Gây ấn tượng mạnh", "Năng lượng tích cực", "Dẫn dắt khéo léo", "Kết thúc ấn tượng", "Mở bài thu hút"
+                    ]
                 },
                 cons: {
-                    "Nội Dung": ["Cần tìm hiểu kỹ hơn", "Sắp xếp ý chưa mạch lạc", "Thiếu ví dụ", "Còn đọc tài liệu nhiều"],
-                    "Kỹ Thuật": ["Nói hơi nhỏ", "Tốc độ quá nhanh", "Ít tương tác mắt", "Che mất bảng/sơ đồ", "Đứng chưa nghiêm túc"]
+                    "Nội Dung": [
+                        "Cần nắm chắc bài hơn", "Nội dung còn sơ sài", "Sắp xếp ý chưa logic", "Thiếu ví dụ", "Phụ thuộc tài liệu",
+                        "Chưa hiểu rõ vấn đề", "Thông tin chưa chính xác", "Diễn đạt còn lủng củng", "Lan man xa đề", "Thiếu trọng tâm",
+                        "Chưa có liên hệ", "Lặp ý nhiều lần", "Bố cục lộn xộn", "Giải thích chưa rõ", "Cần mở rộng thêm"
+                    ],
+                    "Hình Thức": [
+                        "Nói hơi nhỏ", "Nói quá nhanh", "Thiếu tự tin", "Mắt nhìn giấy nhiều", "Che mất bảng",
+                        "Đứng chưa nghiêm túc", "Nói lắp bắp", "Giọng còn đều đều", "Ít tương tác mắt", "Cử chỉ thừa nhiều",
+                        "Quên dùng que chỉ", "Quay lưng xuống lớp", "Phát âm chưa chuẩn", "Đi lại quá nhiều", "Trang phục chưa chỉnh tề"
+                    ]
                 }
             };
 
@@ -576,7 +596,7 @@
                         <div className={`${theme.headerBg} p-3 rounded-xl shadow-sm border ${theme.headerBorder} flex flex-col lg:flex-row justify-between items-center gap-4 shrink-0`}>
                             <h1 className={`text-xl font-bold ${theme.textMain} flex items-center gap-2`}>
                                 <span className={`${theme.accentBg} p-1.5 rounded-lg`}><Icon name="check-square" className={`w-6 h-6 ${theme.accent}`} /></span>
-                                Chấm Video V31
+                                Chấm Video V33
                             </h1>
                             <div className="flex flex-wrap justify-center items-center gap-4">
                                 <div className="flex gap-2">
@@ -754,4 +774,3 @@
     </script>
 </body>
 </html>
-
