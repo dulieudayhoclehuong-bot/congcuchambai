@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Công Cụ Đánh Giá Video (V34 - AI Học Theo Mẫu)</title>
+    <title>Công Cụ Đánh Giá Video (V35 - Prompt Mới)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -68,9 +68,10 @@
             dark: { id: 'dark', name: 'Chế Độ Tối', bg: 'bg-slate-900', headerBg: 'bg-slate-800', headerBorder: 'border-slate-700', textMain: 'text-slate-100', textSub: 'text-slate-400', accent: 'text-blue-400', accentBg: 'bg-slate-800', buttonPrimary: 'bg-blue-600 hover:bg-blue-500 text-white', buttonSecondary: 'bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-600', inputBg: 'bg-slate-800', inputBorder: 'border-slate-600 focus:border-blue-500', cardBg: 'bg-slate-800', cardBorder: 'border-slate-700', fileInputBtn: 'file:bg-slate-700 file:text-blue-400 hover:file:bg-slate-600', isDark: true }
         };
 
-        // --- SAMPLE PROMPTS (DEFAULT) ---
-        const DEFAULT_PROS_SAMPLE = "Bài thuyết trình của con thể hiện sự chuẩn bị kỹ lưỡng về nội dung, khi con nắm vững cấu trúc sơ đồ và có sự mở rộng thông tin một cách hợp lý, giúp phần giải thích từ khóa trở nên sâu sắc. Về phong thái, cô nhận thấy con rất tự tin làm chủ bài nói, với giọng nói to rõ, truyền cảm, và duy trì tương tác mắt tốt. Con cũng đã sử dụng hình thức trình bày một cách nhịp nhàng và hiệu quả (như việc đứng góc hợp lý, chỉ dẫn đúng nội dung) để hỗ trợ cho bài nói thêm rõ ràng.";
-        const DEFAULT_CONS_SAMPLE = "Tuy nhiên, để video đạt hiệu quả cao hơn, con cần cố định thiết bị quay ở một vị trí vững chắc vì hiện tại góc quay vẫn còn hơi rung. Về phần nội dung, con nên bổ sung thêm một ví dụ cụ thể về nhân vật để tăng tính thuyết phục, đồng thời cần mở rộng phần kết luận bằng cách nêu bật đóng góp của nhân vật đó không chỉ mang lại bài học quý giá mà còn tạo ra giá trị tích cực cho cộng đồng.";
+        // --- UPDATED SAMPLE PROMPTS (FROM YOUR REQUEST) ---
+        const DEFAULT_PROS_SAMPLE = "Cô nhận thấy con đã thể hiện phong thái tự tin và làm chủ hoàn toàn bài nói của mình. Giọng nói của con to, rõ ràng, truyền cảm, kết hợp với việc tương tác mắt và ngôn ngữ cơ thể tự nhiên đã giúp bài trình bày rất lôi cuốn. Về mặt hình thức, con đã chọn góc đứng rất hợp lý, không che khuất sơ đồ, đồng thời tương tác nhịp nhàng với bài mẫu, đảm bảo góc quay luôn ổn định và rõ nét.";
+        
+        const DEFAULT_CONS_SAMPLE = "Sơ đồ tư duy của con đã thể hiện được các ý chính, tuy nhiên, các nhánh cần được mở rộng và làm rõ thêm các chi tiết. Cô lưu ý con cần đặc biệt làm rõ phần giải thích lý do vì sao chúng ta cần bày tỏ lòng biết ơn đối với nhân vật mà con đã chọn. Để khắc phục, con hãy bổ sung thêm các luận cứ hoặc ví dụ cụ thể về hành động của nhân vật để làm nổi bật và chứng minh cho ý kiến của mình, giúp bài làm thêm sâu sắc và thuyết phục hơn.";
 
         // --- SAFE ICON COMPONENT ---
         const Icon = ({ name, className = "w-4 h-4", onClick }) => {
@@ -112,13 +113,11 @@
         const callGeminiAI = async (apiKey, text, type, customPrompt, prosSample, consSample) => {
             let notes = text.trim();
             if (!notes) {
-                // If input is empty, use a generic prompt to generate based on sample "spirit"
                 notes = "Nhận xét chung dựa trên bài mẫu."; 
             }
 
             let systemInstruction = "Bạn là một giáo viên tiểu học. Nhiệm vụ của bạn là viết nhận xét cho học sinh dựa trên các từ khóa hoặc ghi chú ngắn giáo viên cung cấp.";
             
-            // Inject the sample as the Gold Standard
             const sampleText = type === 'pros' ? prosSample : consSample;
             
             systemInstruction += `\n\nĐây là BÀI MẪU CHUẨN (Gold Standard) về văn phong, cấu trúc và độ chi tiết mà bạn PHẢI noi theo:\n"${sampleText}"\n\n`;
@@ -209,12 +208,12 @@
 
                             <div>
                                 <label className="block text-sm font-bold mb-1 text-green-700">Mẫu Ưu Điểm (AI sẽ học theo):</label>
-                                <textarea value={prosInput} onChange={(e) => setProsInput(e.target.value)} rows="6" className="w-full p-2 border border-green-200 rounded-lg text-sm bg-green-50 focus:ring-1 focus:ring-green-500" placeholder="Nhập bài mẫu ưu điểm..." />
+                                <textarea value={prosInput} onChange={(e) => setProsInput(e.target.value)} rows="8" className="w-full p-2 border border-green-200 rounded-lg text-sm bg-green-50 focus:ring-1 focus:ring-green-500" placeholder="Nhập bài mẫu ưu điểm..." />
                             </div>
 
                             <div>
                                 <label className="block text-sm font-bold mb-1 text-blue-700">Mẫu Góp Ý (AI sẽ học theo):</label>
-                                <textarea value={consInput} onChange={(e) => setConsInput(e.target.value)} rows="6" className="w-full p-2 border border-blue-200 rounded-lg text-sm bg-blue-50 focus:ring-1 focus:ring-blue-500" placeholder="Nhập bài mẫu góp ý..." />
+                                <textarea value={consInput} onChange={(e) => setConsInput(e.target.value)} rows="8" className="w-full p-2 border border-blue-200 rounded-lg text-sm bg-blue-50 focus:ring-1 focus:ring-blue-500" placeholder="Nhập bài mẫu góp ý..." />
                             </div>
                         </div>
 
@@ -231,13 +230,6 @@
             const [isLoading, setIsLoading] = useState(false);
             const handleAI = async () => {
                 if (!apiKey) return openSettings();
-                // Allow empty text to trigger "Auto Grade" based on generic sample, or warn user
-                if (!text.trim()) {
-                     // Option 1: Warn user
-                     // return alert("Vui lòng chọn ít nhất 1 từ khóa để AI biết nội dung cần chấm!");
-                     // Option 2 (Requested): "Just press button". We pass empty text, backend uses generic prompt.
-                }
-
                 setIsLoading(true);
                 try {
                     const result = await callGeminiAI(apiKey, text, type, customPrompt, prosSample, consSample);
@@ -657,7 +649,7 @@
                         <div className={`${theme.headerBg} p-3 rounded-xl shadow-sm border ${theme.headerBorder} flex flex-col lg:flex-row justify-between items-center gap-4 shrink-0`}>
                             <h1 className={`text-xl font-bold ${theme.textMain} flex items-center gap-2`}>
                                 <span className={`${theme.accentBg} p-1.5 rounded-lg`}><Icon name="check-square" className={`w-6 h-6 ${theme.accent}`} /></span>
-                                Chấm Video V34
+                                Chấm Video V35
                             </h1>
                             <div className="flex flex-wrap justify-center items-center gap-4">
                                 <div className="flex gap-2">
