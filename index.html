@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Công Cụ Đánh Giá Video</title>
+    <title>Công Cụ Đánh Giá Video (V37 - Fix Lẫn Lộn Ưu/Nhược)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -120,9 +120,17 @@
             
             const sampleText = type === 'pros' ? prosSample : consSample;
             
-            systemInstruction += `\n\nĐây là BÀI MẪU CHUẨN (Gold Standard) để bạn học theo về văn phong và tiêu chí chấm:\n"${sampleText}"\n\n`;
-            systemInstruction += `Tiêu chí quan trọng: Trình bày theo chiều kim đồng hồ, có mở rộng ý từ khóa (không chỉ đọc lại), giọng nói rõ ràng, tốc độ vừa phải, không che sơ đồ.`;
-            systemInstruction += `Hãy viết lại nội dung đầu vào dưới đây thành một đoạn văn hoàn chỉnh, sử dụng giọng điệu khích lệ (nếu là ưu điểm) hoặc xây dựng (nếu là góp ý). Xưng 'Cô' và gọi học sinh là 'Con'.`;
+            // --- STRICT CONSTRAINTS TO FIX OVERLAP ---
+            let constraint = "";
+            if (type === 'pros') {
+                constraint = "QUAN TRỌNG: Bạn đang viết vào phần 'Ưu Điểm'. Hãy CHỈ tập trung vào các điểm tốt, tích cực. TUYỆT ĐỐI KHÔNG dùng các từ chuyển ý phủ định như 'Tuy nhiên', 'Mặc dù vậy', 'Nhưng', 'Cần lưu ý', 'Hạn chế là'. Nếu đầu vào có ý chê/nhược điểm, hãy BỎ QUA nó, đừng viết vào đây.";
+            } else {
+                constraint = "QUAN TRỌNG: Bạn đang viết vào phần 'Góp Ý / Hạn Chế'. Hãy tập trung thẳng vào vấn đề cần cải thiện và đưa ra giải pháp khắc phục. KHÔNG cần khen lại những ý đã tốt để tránh lặp lại.";
+            }
+
+            systemInstruction += `\n\nĐây là BÀI MẪU CHUẨN (Gold Standard) để bạn học theo về văn phong:\n"${sampleText}"\n\n`;
+            systemInstruction += `${constraint}\n\n`;
+            systemInstruction += `Tiêu chí: Trình bày theo chiều kim đồng hồ, mở rộng ý (không chỉ đọc), giọng nói, phong thái. Xưng 'Cô' và gọi học sinh là 'Con'.`;
 
             if (customPrompt.trim()) {
                 systemInstruction += `\nYêu cầu bổ sung: ${customPrompt}`;
@@ -644,7 +652,7 @@
                         <div className={`${theme.headerBg} p-3 rounded-xl shadow-sm border ${theme.headerBorder} flex flex-col lg:flex-row justify-between items-center gap-4 shrink-0`}>
                             <h1 className={`text-xl font-bold ${theme.textMain} flex items-center gap-2`}>
                                 <span className={`${theme.accentBg} p-1.5 rounded-lg`}><Icon name="check-square" className={`w-6 h-6 ${theme.accent}`} /></span>
-                                Chấm Video V36
+                                Chấm Video V37
                             </h1>
                             <div className="flex flex-wrap justify-center items-center gap-4">
                                 <div className="flex gap-2">
