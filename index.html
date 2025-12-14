@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Công Cụ Đánh Giá Video (V33 - Thêm Nhiều Gợi Ý)</title>
+    <title>Công Cụ Đánh Giá Video (V34 - AI Học Theo Mẫu)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -68,6 +68,10 @@
             dark: { id: 'dark', name: 'Chế Độ Tối', bg: 'bg-slate-900', headerBg: 'bg-slate-800', headerBorder: 'border-slate-700', textMain: 'text-slate-100', textSub: 'text-slate-400', accent: 'text-blue-400', accentBg: 'bg-slate-800', buttonPrimary: 'bg-blue-600 hover:bg-blue-500 text-white', buttonSecondary: 'bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-600', inputBg: 'bg-slate-800', inputBorder: 'border-slate-600 focus:border-blue-500', cardBg: 'bg-slate-800', cardBorder: 'border-slate-700', fileInputBtn: 'file:bg-slate-700 file:text-blue-400 hover:file:bg-slate-600', isDark: true }
         };
 
+        // --- SAMPLE PROMPTS (DEFAULT) ---
+        const DEFAULT_PROS_SAMPLE = "Bài thuyết trình của con thể hiện sự chuẩn bị kỹ lưỡng về nội dung, khi con nắm vững cấu trúc sơ đồ và có sự mở rộng thông tin một cách hợp lý, giúp phần giải thích từ khóa trở nên sâu sắc. Về phong thái, cô nhận thấy con rất tự tin làm chủ bài nói, với giọng nói to rõ, truyền cảm, và duy trì tương tác mắt tốt. Con cũng đã sử dụng hình thức trình bày một cách nhịp nhàng và hiệu quả (như việc đứng góc hợp lý, chỉ dẫn đúng nội dung) để hỗ trợ cho bài nói thêm rõ ràng.";
+        const DEFAULT_CONS_SAMPLE = "Tuy nhiên, để video đạt hiệu quả cao hơn, con cần cố định thiết bị quay ở một vị trí vững chắc vì hiện tại góc quay vẫn còn hơi rung. Về phần nội dung, con nên bổ sung thêm một ví dụ cụ thể về nhân vật để tăng tính thuyết phục, đồng thời cần mở rộng phần kết luận bằng cách nêu bật đóng góp của nhân vật đó không chỉ mang lại bài học quý giá mà còn tạo ra giá trị tích cực cho cộng đồng.";
+
         // --- SAFE ICON COMPONENT ---
         const Icon = ({ name, className = "w-4 h-4", onClick }) => {
             const ref = useRef(null);
@@ -105,22 +109,28 @@
             return `[${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}]`;
         };
 
-        const callGeminiAI = async (apiKey, text, type, customPrompt) => {
-            if (!text.trim()) return text;
-            let systemInstruction = "Bạn là một giáo viên tiểu học. Hãy viết lại nội dung nhận xét sau đây:";
-            let personaPrompt = type === 'pros' 
-                ? "Hãy viết lại các ý nhận xét ưu điểm sau đây thành một câu văn mạch lạc, giọng điệu khen ngợi, khích lệ và mang tính sư phạm: "
-                : "Hãy viết lại các ý góp ý sau đây thành một câu văn nhẹ nhàng, mang tính xây dựng, giúp học sinh sửa lỗi mà không bị tổn thương: ";
-
-            if (customPrompt.trim()) {
-                systemInstruction += ` Yêu cầu cụ thể: ${customPrompt}.`;
-            } else {
-                if (type === 'pros') systemInstruction += ` Ghi nhận trực tiếp những điểm đã làm được. Giọng văn: Trung lập, rõ ràng.`;
-                else systemInstruction += ` Nêu thẳng vấn đề cần cải thiện và đưa ra giải pháp. Giọng văn: Rõ ràng, định hướng.`;
+        const callGeminiAI = async (apiKey, text, type, customPrompt, prosSample, consSample) => {
+            let notes = text.trim();
+            if (!notes) {
+                // If input is empty, use a generic prompt to generate based on sample "spirit"
+                notes = "Nhận xét chung dựa trên bài mẫu."; 
             }
 
-            const prompt = personaPrompt + `"${text}"`;
-            systemInstruction += " Xưng 'Cô' và gọi học sinh là 'Con'. Viết ngắn gọn (3-4 câu).";
+            let systemInstruction = "Bạn là một giáo viên tiểu học. Nhiệm vụ của bạn là viết nhận xét cho học sinh dựa trên các từ khóa hoặc ghi chú ngắn giáo viên cung cấp.";
+            
+            // Inject the sample as the Gold Standard
+            const sampleText = type === 'pros' ? prosSample : consSample;
+            
+            systemInstruction += `\n\nĐây là BÀI MẪU CHUẨN (Gold Standard) về văn phong, cấu trúc và độ chi tiết mà bạn PHẢI noi theo:\n"${sampleText}"\n\n`;
+            
+            systemInstruction += `Hãy viết lại nội dung đầu vào dưới đây thành một đoạn văn hoàn chỉnh, bắt chước giọng điệu, cách dùng từ và độ sâu sắc của BÀI MẪU CHUẨN ở trên. `;
+            systemInstruction += `Xưng 'Cô' và gọi học sinh là 'Con'.`;
+
+            if (customPrompt.trim()) {
+                systemInstruction += `\nYêu cầu bổ sung: ${customPrompt}`;
+            }
+
+            const prompt = `Nội dung đầu vào (Ghi chú/Từ khóa): "${notes}"`;
 
             try {
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
@@ -143,53 +153,101 @@
         };
 
         // --- COMPONENTS ---
-        const SettingsModal = ({ isOpen, onClose, apiKey, setApiKey, customPrompt, setCustomPrompt }) => {
+        const SettingsModal = ({ isOpen, onClose, apiKey, setApiKey, customPrompt, setCustomPrompt, prosSample, setProsSample, consSample, setConsSample }) => {
             const [keyInput, setKeyInput] = useState(apiKey);
             const [promptInput, setPromptInput] = useState(customPrompt);
-            useEffect(() => { setKeyInput(apiKey); setPromptInput(customPrompt); }, [apiKey, customPrompt, isOpen]);
+            const [prosInput, setProsInput] = useState(prosSample);
+            const [consInput, setConsInput] = useState(consSample);
+
+            useEffect(() => { 
+                setKeyInput(apiKey); 
+                setPromptInput(customPrompt);
+                setProsInput(prosSample);
+                setConsInput(consSample);
+            }, [apiKey, customPrompt, prosSample, consSample, isOpen]);
+
             if (!isOpen) return null;
+            
             const handleSave = () => {
                 setApiKey(keyInput);
                 setCustomPrompt(promptInput);
+                setProsSample(prosInput);
+                setConsSample(consInput);
+                
                 localStorage.setItem("gemini_api_key", keyInput);
                 localStorage.setItem("ai_custom_prompt", promptInput);
+                localStorage.setItem("ai_pros_sample", prosInput);
+                localStorage.setItem("ai_cons_sample", consInput);
                 onClose();
             };
+
+            const resetSamples = () => {
+                if(confirm("Khôi phục bài mẫu mặc định?")) {
+                    setProsInput(DEFAULT_PROS_SAMPLE);
+                    setConsInput(DEFAULT_CONS_SAMPLE);
+                }
+            };
+
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl p-6 w-[600px] max-w-full shadow-2xl">
-                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-purple-600"><Icon name="cpu" /> Cài Đặt AI</h3>
-                        <div className="mb-4">
-                            <label className="block text-sm font-bold mb-2">Google Gemini API Key:</label>
-                            <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} className="w-full p-2 border rounded-lg" placeholder="Dán API Key..." />
+                    <div className="bg-white rounded-xl p-6 w-[800px] max-w-full shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+                        <div className="flex justify-between items-center mb-4 border-b pb-2">
+                            <h3 className="font-bold text-lg flex items-center gap-2 text-purple-600"><Icon name="cpu" /> Cài Đặt AI & Mẫu</h3>
+                            <button onClick={resetSamples} className="text-xs text-blue-600 hover:underline">Khôi phục mẫu gốc</button>
                         </div>
-                        <div className="mb-6">
-                            <label className="block text-sm font-bold mb-2">Hướng dẫn tùy biến cho AI:</label>
-                            <textarea value={promptInput} onChange={(e) => setPromptInput(e.target.value)} rows="3" className="w-full p-2 border rounded-lg" placeholder="Ví dụ: 'Luôn viết câu trả lời ngắn gọn...'" />
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                             <div className="md:col-span-2">
+                                <label className="block text-sm font-bold mb-1">Google Gemini API Key:</label>
+                                <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} className="w-full p-2 border rounded-lg text-sm" placeholder="Dán API Key..." />
+                            </div>
+                            
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-bold mb-1">Hướng dẫn chung (Tùy chọn):</label>
+                                <input type="text" value={promptInput} onChange={(e) => setPromptInput(e.target.value)} className="w-full p-2 border rounded-lg text-sm" placeholder="Ví dụ: 'Luôn viết ngắn gọn', 'Dùng từ hoa mỹ'..." />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold mb-1 text-green-700">Mẫu Ưu Điểm (AI sẽ học theo):</label>
+                                <textarea value={prosInput} onChange={(e) => setProsInput(e.target.value)} rows="6" className="w-full p-2 border border-green-200 rounded-lg text-sm bg-green-50 focus:ring-1 focus:ring-green-500" placeholder="Nhập bài mẫu ưu điểm..." />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold mb-1 text-blue-700">Mẫu Góp Ý (AI sẽ học theo):</label>
+                                <textarea value={consInput} onChange={(e) => setConsInput(e.target.value)} rows="6" className="w-full p-2 border border-blue-200 rounded-lg text-sm bg-blue-50 focus:ring-1 focus:ring-blue-500" placeholder="Nhập bài mẫu góp ý..." />
+                            </div>
                         </div>
-                        <div className="flex justify-end gap-2">
-                            <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg">Đóng</button>
-                            <button onClick={handleSave} className="px-4 py-2 bg-purple-600 text-white rounded-lg">Lưu</button>
+
+                        <div className="flex justify-end gap-2 pt-2 border-t">
+                            <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg text-sm font-bold">Đóng</button>
+                            <button onClick={handleSave} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-purple-700">Lưu Cài Đặt</button>
                         </div>
                     </div>
                 </div>
             );
         };
 
-        const AIButton = ({ text, onResult, type, apiKey, openSettings, customPrompt }) => {
+        const AIButton = ({ text, onResult, type, apiKey, openSettings, customPrompt, prosSample, consSample }) => {
             const [isLoading, setIsLoading] = useState(false);
             const handleAI = async () => {
                 if (!apiKey) return openSettings();
-                if (!text.trim()) return alert("Nhập nội dung trước!");
+                // Allow empty text to trigger "Auto Grade" based on generic sample, or warn user
+                if (!text.trim()) {
+                     // Option 1: Warn user
+                     // return alert("Vui lòng chọn ít nhất 1 từ khóa để AI biết nội dung cần chấm!");
+                     // Option 2 (Requested): "Just press button". We pass empty text, backend uses generic prompt.
+                }
+
                 setIsLoading(true);
                 try {
-                    const result = await callGeminiAI(apiKey, text, type, customPrompt);
+                    const result = await callGeminiAI(apiKey, text, type, customPrompt, prosSample, consSample);
                     onResult(result.trim());
-                } catch { alert("Lỗi AI."); } finally { setIsLoading(false); }
+                } catch { alert("Lỗi AI. Kiểm tra API Key/Mạng."); } finally { setIsLoading(false); }
             };
             return (
-                <button onClick={handleAI} disabled={isLoading} className={`p-1.5 rounded-full border transition-all ${isLoading ? 'bg-yellow-100 border-yellow-300 ai-loading' : 'bg-white hover:bg-yellow-50 text-yellow-600 border-yellow-200'}`} title="AI Viết Lại">
-                    <Icon name="sparkles" className="w-4 h-4" />
+                <button onClick={handleAI} disabled={isLoading} className={`flex items-center gap-1 px-3 py-1 rounded-full border transition-all shadow-sm ${isLoading ? 'bg-purple-100 border-purple-300 ai-loading text-purple-700' : 'bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white border-transparent'}`} title="AI Chấm Theo Mẫu">
+                    <Icon name="sparkles" className="w-3.5 h-3.5" />
+                    <span className="text-xs font-bold">AI Chấm</span>
                 </button>
             );
         };
@@ -233,7 +291,7 @@
             );
         };
 
-        const SimpleInputSection = ({ title, iconName, color, tags, state, setState, videoRef, theme, apiKey, openSettings, customPrompt, type }) => {
+        const SimpleInputSection = ({ title, iconName, color, tags, state, setState, videoRef, theme, apiKey, openSettings, customPrompt, type, prosSample, consSample }) => {
             const colorClasses = {
                 green: { bg: theme.isDark ? "bg-emerald-900/20" : "bg-emerald-50", border: theme.isDark ? "border-emerald-800" : "border-emerald-200", text: theme.isDark ? "text-emerald-400" : "text-emerald-700", chip: theme.isDark ? "bg-emerald-900 text-emerald-300 border-emerald-800" : "bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100" },
                 blue: { bg: theme.isDark ? "bg-blue-900/20" : "bg-blue-50", border: theme.isDark ? "border-blue-800" : "border-blue-200", text: theme.isDark ? "text-blue-400" : "text-blue-700", chip: theme.isDark ? "bg-blue-900 text-blue-300 border-blue-800" : "bg-white border-blue-200 text-blue-700 hover:bg-blue-100" } 
@@ -252,8 +310,9 @@
                             <Icon name={iconName} className={`w-6 h-6 ${color === 'green' ? 'text-emerald-500' : 'text-blue-500'}`} />
                             <h3 className={`font-bold text-xl ${colorClasses.text}`}>{title}</h3>
                         </div>
-                        <div className="flex gap-2">
-                            <AIButton text={state} onResult={setState} type={type} apiKey={apiKey} openSettings={openSettings} customPrompt={customPrompt} />
+                        <div className="flex gap-2 items-center">
+                            <AIButton text={state} onResult={setState} type={type} apiKey={apiKey} openSettings={openSettings} customPrompt={customPrompt} prosSample={prosSample} consSample={consSample} />
+                            <div className="h-4 w-px bg-gray-300 mx-1"></div>
                             <TimestampButton videoRef={videoRef} contentState={state} setContent={setState} isDark={theme.isDark} />
                             <VoiceButton onTranscript={(txt) => handleAppend(txt, state, setState)} isDark={theme.isDark} />
                         </div>
@@ -279,7 +338,7 @@
                         onChange={e => setState(e.target.value)} 
                         rows={12}
                         className={`w-full flex-grow p-4 text-base border rounded-xl focus:outline-none focus:ring-2 focus:ring-opacity-50 resize-y shadow-inner transition-colors ${theme.inputBg} ${theme.inputBorder} ${theme.textMain} placeholder-gray-400`}
-                        placeholder={`Nhập nhận xét chi tiết...`}
+                        placeholder={`Chọn từ khóa ở trên hoặc nhập ý chính, sau đó bấm nút "AI Chấm"...`}
                         style={{ minHeight: '200px' }}
                     ></textarea>
                 </div>
@@ -370,12 +429,14 @@
             const [searchTerm, setSearchTerm] = useState("");
             const [editingKey, setEditingKey] = useState(null);
 
+            // --- AI SETTINGS ---
             const [apiKey, setApiKey] = useState(() => localStorage.getItem("gemini_api_key") || "");
             const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem("ai_custom_prompt") || "");
+            const [prosSample, setProsSample] = useState(() => localStorage.getItem("ai_pros_sample") || DEFAULT_PROS_SAMPLE);
+            const [consSample, setConsSample] = useState(() => localStorage.getItem("ai_cons_sample") || DEFAULT_CONS_SAMPLE);
             const [showSettings, setShowSettings] = useState(false);
 
             const videoRef = useRef(null);
-            const fileInputRef = useRef(null);
             
             const activeFolder = folders.find(f => f.id === activeFolderId) || folders[0];
             const reviews = activeFolder.reviews;
@@ -387,7 +448,7 @@
                 );
             }, [reviews, searchTerm]);
 
-            // --- SUGGESTION TAGS (UPDATED V33 - 15 ITEMS) ---
+            // --- SUGGESTION TAGS ---
             const suggestionTags = {
                 pros: {
                     "Nội Dung": [
@@ -596,11 +657,11 @@
                         <div className={`${theme.headerBg} p-3 rounded-xl shadow-sm border ${theme.headerBorder} flex flex-col lg:flex-row justify-between items-center gap-4 shrink-0`}>
                             <h1 className={`text-xl font-bold ${theme.textMain} flex items-center gap-2`}>
                                 <span className={`${theme.accentBg} p-1.5 rounded-lg`}><Icon name="check-square" className={`w-6 h-6 ${theme.accent}`} /></span>
-                                Chấm Video V33
+                                Chấm Video V34
                             </h1>
                             <div className="flex flex-wrap justify-center items-center gap-4">
                                 <div className="flex gap-2">
-                                    <button onClick={() => setShowSettings(true)} className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg`} title="Cài đặt AI"><Icon name="settings" /></button>
+                                    <button onClick={() => setShowSettings(true)} className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg`} title="Cài đặt AI & Mẫu Nhận Xét"><Icon name="settings" /></button>
                                     <button onClick={handleExportData} className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg`} title="Sao lưu"><Icon name="download" /></button>
                                     <label className={`p-2 ${theme.textSub} hover:${theme.accentBg} rounded-lg cursor-pointer`} title="Khôi phục"><Icon name="upload" /><input type="file" accept=".json" onChange={handleImportData} className="hidden" /></label>
                                 </div>
@@ -689,13 +750,13 @@
                                             <div className="w-full min-h-[300px]">
                                                 <SimpleInputSection 
                                                     title="Ưu Điểm (Điểm Đạt)" iconName="check-circle-2" color="green" tags={suggestionTags.pros} state={pros} setState={setPros} videoRef={videoRef} theme={theme} 
-                                                    apiKey={apiKey} openSettings={()=>setShowSettings(true)} customPrompt={customPrompt} type="pros" 
+                                                    apiKey={apiKey} openSettings={()=>setShowSettings(true)} customPrompt={customPrompt} type="pros" prosSample={prosSample} consSample={consSample}
                                                 />
                                             </div>
                                             <div className="w-full min-h-[300px]">
                                                 <SimpleInputSection 
                                                     title="Góp Ý / Hạn Chế" iconName="message-circle" color="blue" tags={suggestionTags.cons} state={cons} setState={setCons} videoRef={videoRef} theme={theme} 
-                                                    apiKey={apiKey} openSettings={()=>setShowSettings(true)} customPrompt={customPrompt} type="cons" 
+                                                    apiKey={apiKey} openSettings={()=>setShowSettings(true)} customPrompt={customPrompt} type="cons" prosSample={prosSample} consSample={consSample}
                                                 />
                                             </div>
                                         </div>
@@ -764,7 +825,7 @@
                             </div>
                         </div>
                     </div>
-                    <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} apiKey={apiKey} setApiKey={setApiKey} customPrompt={customPrompt} setCustomPrompt={setCustomPrompt} />
+                    <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} apiKey={apiKey} setApiKey={setApiKey} customPrompt={customPrompt} setCustomPrompt={setCustomPrompt} prosSample={prosSample} setProsSample={setProsSample} consSample={consSample} setConsSample={setConsSample} />
                 </div>
             );
         }
