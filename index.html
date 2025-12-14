@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Công Cụ Đánh Giá Video (V35 - Prompt Mới)</title>
+    <title>Công Cụ Đánh Giá Video</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -68,10 +68,10 @@
             dark: { id: 'dark', name: 'Chế Độ Tối', bg: 'bg-slate-900', headerBg: 'bg-slate-800', headerBorder: 'border-slate-700', textMain: 'text-slate-100', textSub: 'text-slate-400', accent: 'text-blue-400', accentBg: 'bg-slate-800', buttonPrimary: 'bg-blue-600 hover:bg-blue-500 text-white', buttonSecondary: 'bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-600', inputBg: 'bg-slate-800', inputBorder: 'border-slate-600 focus:border-blue-500', cardBg: 'bg-slate-800', cardBorder: 'border-slate-700', fileInputBtn: 'file:bg-slate-700 file:text-blue-400 hover:file:bg-slate-600', isDark: true }
         };
 
-        // --- UPDATED SAMPLE PROMPTS (FROM YOUR REQUEST) ---
-        const DEFAULT_PROS_SAMPLE = "Cô nhận thấy con đã thể hiện phong thái tự tin và làm chủ hoàn toàn bài nói của mình. Giọng nói của con to, rõ ràng, truyền cảm, kết hợp với việc tương tác mắt và ngôn ngữ cơ thể tự nhiên đã giúp bài trình bày rất lôi cuốn. Về mặt hình thức, con đã chọn góc đứng rất hợp lý, không che khuất sơ đồ, đồng thời tương tác nhịp nhàng với bài mẫu, đảm bảo góc quay luôn ổn định và rõ nét.";
+        // --- UPDATED SAMPLE PROMPTS (MIND MAP CONTEXT) ---
+        const DEFAULT_PROS_SAMPLE = "Con đã bám sát sơ đồ tư duy của cô và trình bày các nhánh rất khoa học theo đúng chiều kim đồng hồ, giúp người nghe dễ dàng theo dõi mạch bài. Cô khen ngợi con không chỉ nói lại các từ khóa có sẵn mà còn biết mở rộng ý, đưa thêm ví dụ minh họa sinh động, chứng tỏ con hiểu bài rất sâu. Giọng nói của con to, rõ ràng, tốc độ nói vừa phải, và phong thái rất tự tin, đĩnh đạc.";
         
-        const DEFAULT_CONS_SAMPLE = "Sơ đồ tư duy của con đã thể hiện được các ý chính, tuy nhiên, các nhánh cần được mở rộng và làm rõ thêm các chi tiết. Cô lưu ý con cần đặc biệt làm rõ phần giải thích lý do vì sao chúng ta cần bày tỏ lòng biết ơn đối với nhân vật mà con đã chọn. Để khắc phục, con hãy bổ sung thêm các luận cứ hoặc ví dụ cụ thể về hành động của nhân vật để làm nổi bật và chứng minh cho ý kiến của mình, giúp bài làm thêm sâu sắc và thuyết phục hơn.";
+        const DEFAULT_CONS_SAMPLE = "Tuy nhiên, ở một vài nhánh, con vẫn còn phụ thuộc vào từ khóa trên sơ đồ, chỉ đọc lại mà chưa có sự diễn giải mở rộng thêm, khiến nội dung hơi đơn điệu. Con cần chú ý vị trí đứng để không che khuất sơ đồ khi thuyết trình. Ngoài ra, tốc độ nói ở phần cuối hơi nhanh, con hãy bình tĩnh và ngắt nghỉ đúng chỗ để bài nói mạch lạc hơn nhé.";
 
         // --- SAFE ICON COMPONENT ---
         const Icon = ({ name, className = "w-4 h-4", onClick }) => {
@@ -113,23 +113,22 @@
         const callGeminiAI = async (apiKey, text, type, customPrompt, prosSample, consSample) => {
             let notes = text.trim();
             if (!notes) {
-                notes = "Nhận xét chung dựa trên bài mẫu."; 
+                notes = "Nhận xét chung dựa trên tiêu chí sơ đồ tư duy."; 
             }
 
-            let systemInstruction = "Bạn là một giáo viên tiểu học. Nhiệm vụ của bạn là viết nhận xét cho học sinh dựa trên các từ khóa hoặc ghi chú ngắn giáo viên cung cấp.";
+            let systemInstruction = "Bạn là một giáo viên tiểu học đang chấm bài thuyết trình của học sinh dựa trên sơ đồ tư duy có sẵn.";
             
             const sampleText = type === 'pros' ? prosSample : consSample;
             
-            systemInstruction += `\n\nĐây là BÀI MẪU CHUẨN (Gold Standard) về văn phong, cấu trúc và độ chi tiết mà bạn PHẢI noi theo:\n"${sampleText}"\n\n`;
-            
-            systemInstruction += `Hãy viết lại nội dung đầu vào dưới đây thành một đoạn văn hoàn chỉnh, bắt chước giọng điệu, cách dùng từ và độ sâu sắc của BÀI MẪU CHUẨN ở trên. `;
-            systemInstruction += `Xưng 'Cô' và gọi học sinh là 'Con'.`;
+            systemInstruction += `\n\nĐây là BÀI MẪU CHUẨN (Gold Standard) để bạn học theo về văn phong và tiêu chí chấm:\n"${sampleText}"\n\n`;
+            systemInstruction += `Tiêu chí quan trọng: Trình bày theo chiều kim đồng hồ, có mở rộng ý từ khóa (không chỉ đọc lại), giọng nói rõ ràng, tốc độ vừa phải, không che sơ đồ.`;
+            systemInstruction += `Hãy viết lại nội dung đầu vào dưới đây thành một đoạn văn hoàn chỉnh, sử dụng giọng điệu khích lệ (nếu là ưu điểm) hoặc xây dựng (nếu là góp ý). Xưng 'Cô' và gọi học sinh là 'Con'.`;
 
             if (customPrompt.trim()) {
                 systemInstruction += `\nYêu cầu bổ sung: ${customPrompt}`;
             }
 
-            const prompt = `Nội dung đầu vào (Ghi chú/Từ khóa): "${notes}"`;
+            const prompt = `Nội dung ghi chú/từ khóa: "${notes}"`;
 
             try {
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
@@ -330,7 +329,7 @@
                         onChange={e => setState(e.target.value)} 
                         rows={12}
                         className={`w-full flex-grow p-4 text-base border rounded-xl focus:outline-none focus:ring-2 focus:ring-opacity-50 resize-y shadow-inner transition-colors ${theme.inputBg} ${theme.inputBorder} ${theme.textMain} placeholder-gray-400`}
-                        placeholder={`Chọn từ khóa ở trên hoặc nhập ý chính, sau đó bấm nút "AI Chấm"...`}
+                        placeholder={`Chọn từ khóa hoặc nhập ý chính (Ví dụ: Đúng thứ tự, mở rộng ý tốt, nói hơi nhanh...)`}
                         style={{ minHeight: '200px' }}
                     ></textarea>
                 </div>
@@ -440,35 +439,31 @@
                 );
             }, [reviews, searchTerm]);
 
-            // --- SUGGESTION TAGS ---
+            // --- SUGGESTION TAGS (UPDATED V36) ---
             const suggestionTags = {
                 pros: {
-                    "Nội Dung": [
-                        "Nắm chắc kiến thức", "Nội dung chi tiết", "Bố cục logic", "Liên hệ thực tế hay", "Phân tích sâu sắc",
-                        "Trình bày mạch lạc", "Thông tin chính xác", "Có sự chuẩn bị kỹ", "Giải thích rõ ràng", "Lập luận chặt chẽ",
-                        "Mở rộng vấn đề tốt", "Dẫn chứng sinh động", "Sắp xếp ý khoa học", "Trọng tâm rõ ràng", "Hiểu sâu vấn đề"
+                    "Nội Dung (Sơ Đồ Tư Duy)": [
+                        "Trình bày đúng chiều kim đồng hồ", "Biết mở rộng ý từ khóa", "Liên kết các nhánh logic", "Hiểu sâu nội dung sơ đồ",
+                        "Dẫn chứng ví dụ sinh động", "Không phụ thuộc tài liệu", "Diễn đạt mạch lạc", "Nội dung đầy đủ, chi tiết",
+                        "Phần mở rộng rất hay", "Kết nối các ý tự nhiên"
                     ],
                     "Hình Thức": [
-                        "Giọng to rõ", "Phong thái tự tin", "Trang phục gọn gàng", "Tương tác mắt tốt", "Dùng que chỉ dứt khoát",
-                        "Biểu cảm tươi tắn", "Ngôn ngữ cơ thể tốt", "Tốc độ nói vừa phải", "Ngắt nghỉ hợp lý", "Đứng dáng đẹp",
-                        "Cử chỉ tự nhiên", "Bao quát lớp tốt", "Giọng nói truyền cảm", "Phát âm chuẩn", "Làm chủ sân khấu"
+                        "Giọng to, rõ ràng", "Tốc độ nói vừa phải", "Phong thái tự tin", "Đứng góc hợp lý", "Không che khuất sơ đồ",
+                        "Dùng que chỉ dứt khoát", "Tương tác mắt tốt", "Biểu cảm tươi tắn", "Cử chỉ tay tự nhiên", "Ngắt nghỉ đúng chỗ"
                     ],
                     "Khác": [
-                        "Sáng tạo", "Lôi cuốn", "Nhiệt tình", "Tự nhiên", "Hài hước duyên dáng",
-                        "Có điểm nhấn riêng", "Tương tác tốt", "Sử dụng đồ dùng tốt", "Slide đẹp mắt", "Minh họa sinh động",
-                        "Gây ấn tượng mạnh", "Năng lượng tích cực", "Dẫn dắt khéo léo", "Kết thúc ấn tượng", "Mở bài thu hút"
+                        "Sáng tạo", "Lôi cuốn", "Năng lượng tích cực", "Mở bài ấn tượng", "Kết thúc sâu sắc"
                     ]
                 },
                 cons: {
-                    "Nội Dung": [
-                        "Cần nắm chắc bài hơn", "Nội dung còn sơ sài", "Sắp xếp ý chưa logic", "Thiếu ví dụ", "Phụ thuộc tài liệu",
-                        "Chưa hiểu rõ vấn đề", "Thông tin chưa chính xác", "Diễn đạt còn lủng củng", "Lan man xa đề", "Thiếu trọng tâm",
-                        "Chưa có liên hệ", "Lặp ý nhiều lần", "Bố cục lộn xộn", "Giải thích chưa rõ", "Cần mở rộng thêm"
+                    "Nội Dung (Sơ Đồ Tư Duy)": [
+                        "Trình bày lộn xộn (chưa theo chiều)", "Chỉ đọc lại từ khóa", "Thiếu sự mở rộng ý", "Nội dung còn sơ sài",
+                        "Chưa hiểu rõ liên kết nhánh", "Phụ thuộc vào giấy/sơ đồ", "Diễn đạt còn lủng củng", "Quên ý quan trọng",
+                        "Cần bổ sung ví dụ", "Chưa thoát ly tài liệu"
                     ],
                     "Hình Thức": [
-                        "Nói hơi nhỏ", "Nói quá nhanh", "Thiếu tự tin", "Mắt nhìn giấy nhiều", "Che mất bảng",
-                        "Đứng chưa nghiêm túc", "Nói lắp bắp", "Giọng còn đều đều", "Ít tương tác mắt", "Cử chỉ thừa nhiều",
-                        "Quên dùng que chỉ", "Quay lưng xuống lớp", "Phát âm chưa chuẩn", "Đi lại quá nhiều", "Trang phục chưa chỉnh tề"
+                        "Nói quá nhanh", "Nói quá chậm/ề à", "Giọng nói nhỏ/lí nhí", "Che mất sơ đồ", "Đứng quay lưng xuống lớp",
+                        "Quên dùng que chỉ", "Ít tương tác mắt", "Cử chỉ thừa nhiều", "Thiếu tự tin", "Trang phục chưa chỉnh tề"
                     ]
                 }
             };
@@ -649,7 +644,7 @@
                         <div className={`${theme.headerBg} p-3 rounded-xl shadow-sm border ${theme.headerBorder} flex flex-col lg:flex-row justify-between items-center gap-4 shrink-0`}>
                             <h1 className={`text-xl font-bold ${theme.textMain} flex items-center gap-2`}>
                                 <span className={`${theme.accentBg} p-1.5 rounded-lg`}><Icon name="check-square" className={`w-6 h-6 ${theme.accent}`} /></span>
-                                Chấm Video V35
+                                Chấm Video V36
                             </h1>
                             <div className="flex flex-wrap justify-center items-center gap-4">
                                 <div className="flex gap-2">
